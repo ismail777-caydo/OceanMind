@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-
 import {
   View,
   Text,
@@ -17,9 +16,19 @@ import { Ionicons } from "@expo/vector-icons";
 type Step = "select" | "loading" | "result";
 
 export default function Detection() {
-  const router = useRouter(); // ✅ موجود
+  const router = useRouter();
+
   const [step, setStep] = useState<Step>("select");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  // ✅ زر رجوع ذكي
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/home");
+    }
+  };
 
   const pickImage = async (fromCamera: boolean) => {
     try {
@@ -66,9 +75,9 @@ export default function Detection() {
     >
       <View style={styles.overlay} />
 
-      {/* Top bar */}
+      {/* TOP BAR */}
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={18} color="#fff" />
           <Text style={styles.backText}>Retour</Text>
         </Pressable>
@@ -125,12 +134,6 @@ export default function Detection() {
             Veuillez patienter pendant que l'intelligence artificielle analyse
             le poisson.
           </Text>
-
-          <View style={styles.waitBox}>
-            <Text style={styles.waitText}>
-              Cette opération peut prendre quelques secondes.
-            </Text>
-          </View>
         </View>
       )}
 
@@ -173,7 +176,7 @@ export default function Detection() {
             style={styles.btnGreen}
             onPress={() =>
               router.push(
-                "/(tabs)/add-capture?from=detection&species=Sardine&weightKg=0.28&zone=Larache,%20Zone%20Nord"
+                "/add-capture?from=detection&species=Sardine&weightKg=0.28&zone=Larache"
               )
             }
           >
@@ -207,7 +210,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 14,
@@ -223,6 +225,7 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     alignItems: "center",
   },
+
   logo: { width: 170, height: 170, marginBottom: 6 },
   logoSmall: { width: 160, height: 160, marginBottom: 6 },
 
@@ -283,30 +286,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     textAlign: "center",
-    maxWidth: 320,
-  },
-  waitBox: {
-    marginTop: 16,
-    width: "100%",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  waitText: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
   },
 
-  resultWrap: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 14,
-  },
+  resultWrap: { flex: 1, paddingHorizontal: 18, paddingTop: 14 },
   resultHeader: {
     color: "#fff",
     fontSize: 18,
@@ -365,4 +347,3 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 });
- 

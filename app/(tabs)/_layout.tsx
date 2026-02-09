@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="home" // 👈 الجديد: يبدا بـ home
       screenOptions={{
         headerShown: false,
 

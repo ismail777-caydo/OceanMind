@@ -11,7 +11,9 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// ✅ NEW: AuthContext
+import { useAuth } from "../../src/auth/AuthContext";
 
 function RowNav({ icon, label, onPress }: any) {
   return (
@@ -36,6 +38,9 @@ function RowNav({ icon, label, onPress }: any) {
 export default function Profil() {
   const router = useRouter();
 
+  // ✅ Auth
+  const { logout } = useAuth();
+
   const [lang, setLang] = useState<"Français" | "Arabe" | "Darija">("Français");
   const [voiceMode, setVoiceMode] = useState(true);
   const [meteoNotif, setMeteoNotif] = useState(true);
@@ -47,17 +52,13 @@ export default function Profil() {
   };
 
   // ✅ رجوع مضمون لـ Accueil (بلا GO_BACK)
-  const goHome = () => router.replace("/(tabs)");
+  const goHome = () => router.replace("/home");
 
-  // ✅ Logout: مسح session + رجوع للـ login
+
+  // ✅ Logout via AuthContext
   const handleLogout = async () => {
-    await AsyncStorage.removeItem("oceanmind_isLoggedIn");
-
-    // ✅ إذا login ديالك هو app/index.tsx
-    router.replace("/");
-
-    // ✅ إذا login ديالك هو app/login.tsx خليه هكذا بدل اللي فوق:
-    // router.replace("/login");
+    await logout();
+    router.replace("/"); // 👈 ديال login فـ root
   };
 
   return (

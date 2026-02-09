@@ -1,34 +1,45 @@
+// src/auth/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const AuthContext = createContext(null);
+type AuthContextType = {
+  ready: boolean;
+  logged: boolean;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextType | null>(null);
 
 const KEY = "OCEANMIND_FAKE_AUTH";
 
-export function AuthProvider({ children }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [logged, setLogged] = useState(false);
 
   useEffect(() => {
     (async () => {
       const v = await AsyncStorage.getItem(KEY);
-      setIsLoggedIn(v === "1");
+      setLogged(v === "1");
       setReady(true);
     })();
   }, []);
 
   const login = async () => {
     await AsyncStorage.setItem(KEY, "1");
-    setIsLoggedIn(true);
+    setLogged(true);
   };
 
   const logout = async () => {
+    console.log("LOGOUT CALLED"); // 👈 الجديد
+    console.log("LOGOUT: removed key and setting logged=false");
+
     await AsyncStorage.removeItem(KEY);
-    setIsLoggedIn(false);
+    setLogged(false);
   };
 
   return (
-    <AuthContext.Provider value={{ ready, isLoggedIn, login, logout }}>
+    <AuthContext.Provider value={{ ready, logged, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

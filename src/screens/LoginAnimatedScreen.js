@@ -11,11 +11,14 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 
-// ✅ NEW: AsyncStorage helper
-import AsyncStorage from "@react-native-async-storage/async-storage";
+// ✅ AuthContext
+import { useAuth } from "../auth/AuthContext";
 
 export default function LoginAnimatedScreen() {
   const router = useRouter();
+
+  // ✅ Auth (Fake login دابا)
+  const { login } = useAuth();
 
   const [opened, setOpened] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -25,7 +28,7 @@ export default function LoginAnimatedScreen() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
 
-  // ✅ Validation
+  // ✅ Validation (باقية كما هي)
   const validateLogin = () => {
     const e = {};
     const emailTrim = email.trim();
@@ -43,7 +46,6 @@ export default function LoginAnimatedScreen() {
   // Anim values
   const logoY = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(1)).current;
-
   const cardY = useRef(new Animated.Value(-60)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
 
@@ -75,27 +77,29 @@ export default function LoginAnimatedScreen() {
     ]).start();
   };
 
-  // Auto after 4 seconds
   useEffect(() => {
     const t = setTimeout(() => trigger(), 4000);
     return () => clearTimeout(t);
   }, []);
 
-  // Logo position (after animation)
   const logoTranslateY = logoY.interpolate({
     inputRange: [-1, 0],
     outputRange: [-40, 90],
   });
 
-  // ✅ NEW: login handler (front فقط)
+  // ✅ LOGIN (Fake)
   const handleLogin = async () => {
     if (!validateLogin()) return;
 
-    // نخزنو بلي راه دخل
-    await AsyncStorage.setItem("oceanmind_isLoggedIn", "1");
-
-    // نمشيو للـ tabs
-    router.replace("/(tabs)");
+    try {
+      await login(); // ✅ غير هاد السطر تبدّل
+      router.replace("/home");
+    } catch (e) {
+      setErrors((prev) => ({
+        ...prev,
+        general: "Login failed",
+      }));
+    }
   };
 
   return (
@@ -106,7 +110,6 @@ export default function LoginAnimatedScreen() {
         resizeMode="cover"
       >
         <View style={styles.safe}>
-          {/* LOGO */}
           <Animated.View
             style={[
               styles.logoBlock,
@@ -124,27 +127,25 @@ export default function LoginAnimatedScreen() {
             </View>
           </Animated.View>
 
-          {/* LOGIN CARD */}
           <Animated.View
             pointerEvents={opened ? "auto" : "none"}
             style={[
               styles.card,
-              {
-                opacity: cardOpacity,
-                transform: [{ translateY: cardY }],
-              },
+              { opacity: cardOpacity, transform: [{ translateY: cardY }] },
             ]}
           >
             <Text style={styles.cardTitle}>Connexion</Text>
 
-            <Text style={styles.label}>E-mail</Text>
+            {errors.general && (
+              <Text style={styles.errorText}>{errors.general}</Text>
+            )}
 
-            {/* ✅ Email Input */}
+            <Text style={styles.label}>E-mail</Text>
             <TextInput
               value={email}
               onChangeText={(t) => {
                 setEmail(t);
-                setErrors((prev) => ({ ...prev, email: undefined }));
+                setErrors((p) => ({ ...p, email: undefined, general: undefined }));
               }}
               placeholder="votre.email@exemple.com"
               placeholderTextColor="rgba(255,255,255,0.65)"
@@ -152,29 +153,30 @@ export default function LoginAnimatedScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            {errors.email ? (
+            {errors.email && (
               <Text style={styles.errorText}>{errors.email}</Text>
-            ) : null}
+            )}
 
             <Text style={[styles.label, { marginTop: 12 }]}>Mot de passe</Text>
-
-            {/* ✅ Password Input */}
             <TextInput
               value={password}
               onChangeText={(t) => {
                 setPassword(t);
-                setErrors((prev) => ({ ...prev, password: undefined }));
+                setErrors((p) => ({
+                  ...p,
+                  password: undefined,
+                  general: undefined,
+                }));
               }}
               placeholder="********"
               placeholderTextColor="rgba(255,255,255,0.65)"
               style={[styles.input, errors.password && styles.inputError]}
               secureTextEntry
             />
-            {errors.password ? (
+            {errors.password && (
               <Text style={styles.errorText}>{errors.password}</Text>
-            ) : null}
+            )}
 
-            {/* LOGIN BUTTON */}
             <Pressable
               onPressIn={() => setPressed(true)}
               onPressOut={() => setPressed(false)}
@@ -185,7 +187,7 @@ export default function LoginAnimatedScreen() {
                 pressed && { transform: [{ scale: 1.06 }] },
               ]}
             >
-              <Text style={[styles.btnText, pressed && { color: "#ffffff" }]}>
+              <Text style={[styles.btnText, pressed && { color: "#fff" }]}>
                 Se connecter
               </Text>
             </Pressable>
@@ -205,17 +207,8 @@ export default function LoginAnimatedScreen() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  safe: {
-    flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "center",
-  },
-
-  logoBlock: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 100,
-  },
+  safe: { flex: 1, paddingHorizontal: 20, justifyContent: "center" },
+  logoBlock: { alignItems: "center", marginTop: 100 },
   logoWrapper: {
     shadowColor: "#0ea5e9",
     shadowOffset: { width: 0, height: 12 },
@@ -224,7 +217,6 @@ const styles = StyleSheet.create({
     elevation: 18,
   },
   logo: { width: 220, height: 220 },
-
   card: {
     marginTop: 22,
     borderRadius: 18,
@@ -255,10 +247,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-
-  inputError: {
-    borderColor: "rgba(239,68,68,0.9)",
-  },
+  inputError: { borderColor: "rgba(239,68,68,0.9)" },
   errorText: {
     marginTop: 6,
     marginBottom: 2,
@@ -266,7 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-
   btn: {
     marginTop: 16,
     height: 46,
@@ -275,17 +263,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(56,189,248,0.95)",
   },
-  btnPressed: {
-    backgroundColor: "#16a34a",
-  },
-  btnText: {
-    color: "#083344",
-    fontWeight: "800",
-  },
-  linkWrap: {
-    marginTop: 10,
-    alignItems: "center",
-  },
+  btnPressed: { backgroundColor: "#16a34a" },
+  btnText: { color: "#083344", fontWeight: "800" },
+  linkWrap: { marginTop: 10, alignItems: "center" },
   linkText: {
     color: "rgba(255,255,255,0.9)",
     fontSize: 12,
