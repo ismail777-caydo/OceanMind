@@ -14,7 +14,11 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 function SmallStat({ icon, label, value }: any) {
   return (
     <View style={styles.smallStat}>
-      <MaterialCommunityIcons name={icon} size={18} color="rgba(255,255,255,0.9)" />
+      <MaterialCommunityIcons
+        name={icon}
+        size={18}
+        color="rgba(255,255,255,0.9)"
+      />
       <Text style={styles.smallLabel}>{label}</Text>
       <Text style={styles.smallValue}>{value}</Text>
     </View>
@@ -23,6 +27,15 @@ function SmallStat({ icon, label, value }: any) {
 
 export default function Meteo() {
   const router = useRouter();
+
+  // ✅ زر رجوع ذكي
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/home");
+    }
+  };
 
   return (
     <ImageBackground
@@ -33,16 +46,23 @@ export default function Meteo() {
       <View style={styles.overlay} />
 
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={18} color="#fff" />
           <Text style={styles.backText}>Retour</Text>
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Logo */}
-        <Image source={require("../../src/assets/logo.png")} style={styles.logo} resizeMode="contain" />
-        
+        <Image
+          source={require("../../src/assets/logo.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+
         <Text style={styles.title}>Météo Marine IA</Text>
 
         {/* Location pill */}
@@ -55,7 +75,11 @@ export default function Meteo() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <MaterialCommunityIcons name="weather-partly-cloudy" size={18} color="#facc15" />
+              <MaterialCommunityIcons
+                name="weather-partly-cloudy"
+                size={18}
+                color="#facc15"
+              />
               <Text style={styles.cardTitle}>Conditions actuelles</Text>
             </View>
 
@@ -71,14 +95,18 @@ export default function Meteo() {
             </View>
 
             <View style={styles.bigIconBox}>
-              <MaterialCommunityIcons name="weather-cloudy" size={24} color="#fff" />
+              <MaterialCommunityIcons
+                name="weather-cloudy"
+                size={24}
+                color="#fff"
+              />
             </View>
           </View>
 
           <View style={styles.statRow}>
-            <SmallStat icon="weather-windy" label="Vent" value="15 km/h\n↘ NE" />
-            <SmallStat icon="waves" label="Vagues" value="1.2 m\nCalme" />
-            <SmallStat icon="thermometer-water" label="Eau" value="18°C\nNormale" />
+            <SmallStat icon="weather-windy" label="Vent" value={"15 km/h\n↘ NE"} />
+            <SmallStat icon="waves" label="Vagues" value={"1.2 m\nCalme"} />
+            <SmallStat icon="thermometer-water" label="Eau" value={"18°C\nNormale"} />
           </View>
         </View>
 
@@ -114,13 +142,21 @@ export default function Meteo() {
 
           <View style={styles.detailGrid}>
             <View style={styles.detailItem}>
-              <MaterialCommunityIcons name="navigation-variant-outline" size={18} color="#2dd4bf" />
+              <MaterialCommunityIcons
+                name="navigation-variant-outline"
+                size={18}
+                color="#2dd4bf"
+              />
               <Text style={styles.detailLabel}>Direction</Text>
               <Text style={styles.detailValue}>Nord-Est</Text>
             </View>
 
             <View style={styles.detailItem}>
-              <MaterialCommunityIcons name="eye-outline" size={18} color="#93c5fd" />
+              <MaterialCommunityIcons
+                name="eye-outline"
+                size={18}
+                color="#93c5fd"
+              />
               <Text style={styles.detailLabel}>Visibilité</Text>
               <Text style={styles.detailValue}>10 km</Text>
             </View>
@@ -135,12 +171,20 @@ export default function Meteo() {
 
         {/* ATTENTION */}
         <View style={styles.alertCard}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 6,
+            }}
+          >
             <Ionicons name="warning-outline" size={18} color="#f59e0b" />
             <Text style={styles.alertTitle}>Attention</Text>
           </View>
           <Text style={styles.alertText}>
-            Conditions dangereuses prévues cet après-midi (vent fort à partir de 14h00).
+            Conditions dangereuses prévues cet après-midi (vent fort à partir de
+            14h00).
           </Text>
         </View>
 
@@ -197,7 +241,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  locationText: { color: "rgba(255,255,255,0.9)", fontWeight: "800", fontSize: 12 },
+  locationText: {
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "800",
+    fontSize: 12,
+  },
 
   card: {
     marginTop: 14,
@@ -235,7 +283,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   temp: { color: "#fff", fontSize: 28, fontWeight: "900" },
-  subText: { marginTop: 4, color: "rgba(255,255,255,0.8)", fontWeight: "700" },
+  subText: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "700",
+  },
 
   bigIconBox: {
     width: 44,
@@ -258,8 +310,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  smallLabel: { marginTop: 6, color: "rgba(255,255,255,0.7)", fontWeight: "800", fontSize: 11 },
-  smallValue: { marginTop: 4, color: "#fff", fontWeight: "900", fontSize: 12, lineHeight: 16 },
+  smallLabel: {
+    marginTop: 6,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
+  smallValue: {
+    marginTop: 4,
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+    lineHeight: 16,
+  },
 
   strongText: { color: "#fff", fontWeight: "900", marginBottom: 10 },
 
@@ -273,7 +336,11 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.10)",
   },
   pillRisk: { alignItems: "flex-start" },
-  pillLabel: { color: "rgba(255,255,255,0.7)", fontWeight: "800", fontSize: 11 },
+  pillLabel: {
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
   pillValue: { marginTop: 8, color: "#fff", fontWeight: "900", fontSize: 12 },
 
   riskChip: {
@@ -295,7 +362,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  detailLabel: { marginTop: 6, color: "rgba(255,255,255,0.7)", fontWeight: "800", fontSize: 11 },
+  detailLabel: {
+    marginTop: 6,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
   detailValue: { marginTop: 6, color: "#fff", fontWeight: "900", fontSize: 12 },
 
   alertCard: {
@@ -307,5 +379,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(245, 158, 11, 0.22)",
   },
   alertTitle: { color: "#fff", fontWeight: "900" },
-  alertText: { color: "rgba(255,255,255,0.78)", fontWeight: "700", lineHeight: 16 },
+  alertText: {
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: "700",
+    lineHeight: 16,
+  },
 });

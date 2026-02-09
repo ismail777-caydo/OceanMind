@@ -72,7 +72,7 @@ export default function Profil() {
       <View style={styles.topBar}>
         <Pressable onPress={goHome} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={18} color="#fff" />
-          <Text style={styles.backText}>Accueil</Text>
+          <Text style={styles.backText}>Retour</Text>
         </Pressable>
       </View>
 

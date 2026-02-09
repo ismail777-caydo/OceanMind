@@ -206,18 +206,35 @@ const styles = StyleSheet.create({
   },
 
   topBar: { paddingTop: 52, paddingHorizontal: 16 },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-  },
-  backText: { color: "#fff", fontWeight: "800", fontSize: 12 },
+backBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  alignSelf: "flex-start",
+
+  // ✅ يخليها قد المحتوى
+  width: "auto",
+  maxWidth: "80%",
+
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  borderRadius: 800,
+
+  backgroundColor: "rgba(255,255,255,0.10)",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.16)",
+
+  // ✅ مهم باش ما تتمددش
+  flexGrow: 0,
+  flexShrink: 0,
+},
+
+ backText: {
+  color: "#fff",
+  fontWeight: "800",
+  fontSize: 12,
+  includeFontPadding: false,
+},
+
 
   center: {
     flex: 1,
