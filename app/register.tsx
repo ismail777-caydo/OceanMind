@@ -11,8 +11,14 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 
+// ✅ AuthContext
+import { useAuth } from "../src/auth/AuthContext";
+
 export default function Register() {
   const router = useRouter();
+
+  // ✅ Auth
+  const { register } = useAuth();
 
   const [showPass, setShowPass] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -70,13 +76,22 @@ export default function Register() {
 
         {/* Card */}
         <View style={styles.card}>
+          {/* ✅ General Error */}
+          {errors.general ? (
+            <Text style={styles.errorText}>{errors.general}</Text>
+          ) : null}
+
           {/* Nom complet */}
           <Text style={styles.label}>Nom complet</Text>
           <TextInput
             value={fullName}
             onChangeText={(t) => {
               setFullName(t);
-              setErrors((prev) => ({ ...prev, fullName: undefined }));
+              setErrors((prev) => ({
+                ...prev,
+                fullName: undefined,
+                general: undefined,
+              }));
             }}
             placeholder="Votre nom complet"
             placeholderTextColor="rgba(255,255,255,0.6)"
@@ -101,7 +116,11 @@ export default function Register() {
                 onChangeText={(t) => {
                   const onlyDigits = t.replace(/[^0-9]/g, "");
                   setPhone(onlyDigits);
-                  setErrors((prev) => ({ ...prev, phone: undefined }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    phone: undefined,
+                    general: undefined,
+                  }));
                 }}
                 placeholder="6 XX XX XX XX"
                 placeholderTextColor="rgba(255,255,255,0.6)"
@@ -120,7 +139,11 @@ export default function Register() {
             value={city}
             onChangeText={(t) => {
               setCity(t);
-              setErrors((prev) => ({ ...prev, city: undefined }));
+              setErrors((prev) => ({
+                ...prev,
+                city: undefined,
+                general: undefined,
+              }));
             }}
             placeholder="Ex: Agadir, Casablanca, Essaouira..."
             placeholderTextColor="rgba(255,255,255,0.6)"
@@ -136,7 +159,11 @@ export default function Register() {
             value={email}
             onChangeText={(t) => {
               setEmail(t);
-              setErrors((prev) => ({ ...prev, email: undefined }));
+              setErrors((prev) => ({
+                ...prev,
+                email: undefined,
+                general: undefined,
+              }));
             }}
             placeholder="votre.email@exemple.com"
             placeholderTextColor="rgba(255,255,255,0.6)"
@@ -156,7 +183,11 @@ export default function Register() {
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
-                  setErrors((prev) => ({ ...prev, password: undefined }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    password: undefined,
+                    general: undefined,
+                  }));
                 }}
                 placeholder="********"
                 placeholderTextColor="rgba(255,255,255,0.6)"
@@ -186,7 +217,21 @@ export default function Register() {
             onPressOut={() => setPressed(false)}
             onPress={async () => {
               if (!validateRegister()) return;
-              router.replace("/(tabs)");
+
+              try {
+                await register({
+                  name: fullName.trim(),
+                  phone: phone.trim(),
+                  email: email.trim(),
+                  password,
+                });
+                router.replace("/home"); // ✅ كما قلتي
+              } catch (e) {
+                setErrors((prev) => ({
+                  ...prev,
+                  general: "Register failed",
+                }));
+              }
             }}
             style={[
               styles.btn,
@@ -258,7 +303,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
   },
 
-  // ✅ Error styles
   inputError: {
     borderColor: "rgba(239,68,68,0.9)",
   },

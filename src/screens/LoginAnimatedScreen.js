@@ -16,19 +16,15 @@ import { useAuth } from "../auth/AuthContext";
 
 export default function LoginAnimatedScreen() {
   const router = useRouter();
-
-  // ✅ Auth (Fake login دابا)
   const { login } = useAuth();
 
   const [opened, setOpened] = useState(false);
   const [pressed, setPressed] = useState(false);
 
-  // ✅ Inputs + Errors
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
 
-  // ✅ Validation (باقية كما هي)
   const validateLogin = () => {
     const e = {};
     const emailTrim = email.trim();
@@ -54,26 +50,10 @@ export default function LoginAnimatedScreen() {
     setOpened(true);
 
     Animated.parallel([
-      Animated.timing(logoY, {
-        toValue: -1,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(logoScale, {
-        toValue: 0.95,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(cardY, {
-        toValue: 0,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(cardOpacity, {
-        toValue: 1,
-        duration: 550,
-        useNativeDriver: true,
-      }),
+      Animated.timing(logoY, { toValue: -1, duration: 700, useNativeDriver: true }),
+      Animated.timing(logoScale, { toValue: 0.95, duration: 700, useNativeDriver: true }),
+      Animated.timing(cardY, { toValue: 0, duration: 700, useNativeDriver: true }),
+      Animated.timing(cardOpacity, { toValue: 1, duration: 550, useNativeDriver: true }),
     ]).start();
   };
 
@@ -87,17 +67,21 @@ export default function LoginAnimatedScreen() {
     outputRange: [-40, 90],
   });
 
-  // ✅ LOGIN (Fake)
   const handleLogin = async () => {
     if (!validateLogin()) return;
 
     try {
-      await login(); // ✅ غير هاد السطر تبدّل
-      router.replace("/home");
+      // ✅ مسح أي خطأ قديم
+      setErrors({});
+
+      await login(email.trim(), password);
+
+      // ✅ دخل للـ tabs مباشرة (أأمن route)
+      router.replace("/(tabs)");
     } catch (e) {
       setErrors((prev) => ({
         ...prev,
-        general: "Login failed",
+        general: e?.message || "Login failed",
       }));
     }
   };
@@ -110,35 +94,26 @@ export default function LoginAnimatedScreen() {
         resizeMode="cover"
       >
         <View style={styles.safe}>
+          {/* LOGO */}
           <Animated.View
             style={[
               styles.logoBlock,
-              {
-                transform: [{ translateY: logoTranslateY }, { scale: logoScale }],
-              },
+              { transform: [{ translateY: logoTranslateY }, { scale: logoScale }] },
             ]}
           >
             <View style={styles.logoWrapper}>
-              <Image
-                source={require("../assets/logo.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+              <Image source={require("../assets/logo.png")} style={styles.logo} resizeMode="contain" />
             </View>
           </Animated.View>
 
+          {/* CARD */}
           <Animated.View
             pointerEvents={opened ? "auto" : "none"}
-            style={[
-              styles.card,
-              { opacity: cardOpacity, transform: [{ translateY: cardY }] },
-            ]}
+            style={[styles.card, { opacity: cardOpacity, transform: [{ translateY: cardY }] }]}
           >
             <Text style={styles.cardTitle}>Connexion</Text>
 
-            {errors.general && (
-              <Text style={styles.errorText}>{errors.general}</Text>
-            )}
+            {!!errors.general && <Text style={styles.errorText}>{errors.general}</Text>}
 
             <Text style={styles.label}>E-mail</Text>
             <TextInput
@@ -153,29 +128,21 @@ export default function LoginAnimatedScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            {errors.email && (
-              <Text style={styles.errorText}>{errors.email}</Text>
-            )}
+            {!!errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
             <Text style={[styles.label, { marginTop: 12 }]}>Mot de passe</Text>
             <TextInput
               value={password}
               onChangeText={(t) => {
                 setPassword(t);
-                setErrors((p) => ({
-                  ...p,
-                  password: undefined,
-                  general: undefined,
-                }));
+                setErrors((p) => ({ ...p, password: undefined, general: undefined }));
               }}
               placeholder="********"
               placeholderTextColor="rgba(255,255,255,0.65)"
               style={[styles.input, errors.password && styles.inputError]}
               secureTextEntry
             />
-            {errors.password && (
-              <Text style={styles.errorText}>{errors.password}</Text>
-            )}
+            {!!errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
 
             <Pressable
               onPressIn={() => setPressed(true)}
@@ -187,15 +154,10 @@ export default function LoginAnimatedScreen() {
                 pressed && { transform: [{ scale: 1.06 }] },
               ]}
             >
-              <Text style={[styles.btnText, pressed && { color: "#fff" }]}>
-                Se connecter
-              </Text>
+              <Text style={[styles.btnText, pressed && { color: "#fff" }]}>Se connecter</Text>
             </Pressable>
 
-            <Pressable
-              style={styles.linkWrap}
-              onPress={() => router.push("/register")}
-            >
+            <Pressable style={styles.linkWrap} onPress={() => router.push("/register")}>
               <Text style={styles.linkText}>Créer un compte</Text>
             </Pressable>
           </Animated.View>
@@ -208,6 +170,7 @@ export default function LoginAnimatedScreen() {
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: 20, justifyContent: "center" },
+
   logoBlock: { alignItems: "center", marginTop: 100 },
   logoWrapper: {
     shadowColor: "#0ea5e9",
@@ -217,6 +180,7 @@ const styles = StyleSheet.create({
     elevation: 18,
   },
   logo: { width: 220, height: 220 },
+
   card: {
     marginTop: 22,
     borderRadius: 18,

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -13,51 +13,8 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 
-type Entry = {
-  id: string;
-  dateTitle: string;
-  time: string;
-  species: string;
-  weightKg: string;
-  city: string;
-  zone: string;
-  legal: boolean;
-};
-
-const STORAGE_KEY = "oceanmind_logbook_entries_v1";
-
-const FAKE_ENTRIES: Entry[] = [
-  {
-    id: "1",
-    dateTitle: "2 Février 2026",
-    time: "07:30",
-    species: "Sardines",
-    weightKg: "12.5",
-    city: "Larache",
-    zone: "Zone Nord",
-    legal: true,
-  },
-  {
-    id: "2",
-    dateTitle: "1 Février 2026",
-    time: "06:15",
-    species: "Maquereaux",
-    weightKg: "8.3",
-    city: "Larache",
-    zone: "Zone Est",
-    legal: true,
-  },
-  {
-    id: "3",
-    dateTitle: "31 Janvier 2026",
-    time: "14:45",
-    species: "Dorades",
-    weightKg: "5.2",
-    city: "Larache",
-    zone: "Zone Sud",
-    legal: true,
-  },
-];
+const BASE_URL = "http://192.168.11.114:8000"; // ✅ بدل IP ديال PC
+const TOKEN_KEY = "OCEANMIND_TOKEN";
 
 function Chip({ label, icon, active, onPress }: any) {
   return (
@@ -77,13 +34,13 @@ function Chip({ label, icon, active, onPress }: any) {
   );
 }
 
-function EntryCard({ e }: { e: Entry }) {
+function EntryCard({ e }: any) {
   return (
     <View style={styles.entryCard}>
       <View style={styles.entryTopRow}>
         <View>
-          <Text style={styles.entryDate}>{e.dateTitle}</Text>
-          <Text style={styles.entryTime}>{e.time}</Text>
+          <Text style={styles.entryDate}>{e.dateTitle || e.dateISO || "—"}</Text>
+          <Text style={styles.entryTime}>{e.time || e.timeStr || "—"}</Text>
         </View>
 
         <View style={styles.legalBadge}>
@@ -113,32 +70,51 @@ function EntryCard({ e }: { e: Entry }) {
 
 export default function Logbook() {
   const router = useRouter();
-  const [filter, setFilter] = useState<"Date" | "Espèce" | "Zone">("Date");
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [filter, setFilter] = useState("Date");
+  const [entries, setEntries] = useState<any[]>([]);
 
-  const loadEntries = useCallback(async () => {
+const loadEntries = useCallback(async () => {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+
+    console.log("LIST URL =>", `${BASE_URL}/logbook/list`);
+    console.log("LIST TOKEN =>", token ? "YES" : "NO");
+
+    const res = await fetch(`${BASE_URL}/logbook/list`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    console.log("LIST STATUS =>", res.status);
+
+    let data: any = null;
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(FAKE_ENTRIES));
-        setEntries(FAKE_ENTRIES);
-        return;
-      }
-      const parsed = JSON.parse(raw) as Entry[];
-      setEntries(Array.isArray(parsed) ? parsed : FAKE_ENTRIES);
-    } catch (e) {
-      setEntries(FAKE_ENTRIES);
+      data = await res.json();
+    } catch (err) {
+      data = { ok: false, message: "Response is not JSON" };
     }
-  }, []);
+
+    console.log("LIST RAW =>", data);
+
+    if (!res.ok || !data?.ok) {
+      setEntries([]);
+      return;
+    }
+
+    setEntries(Array.isArray(data.items) ? data.items : []);
+  } catch (e: any) {
+    console.log("LIST ERROR =>", e?.message || e);
+    setEntries([]);
+  }
+}, []);
+
 
   useFocusEffect(
     useCallback(() => {
       loadEntries();
     }, [loadEntries])
   );
-
-  // دابا filters غير UI (من بعد نطبّقهم)
-  const shown = useMemo(() => entries, [entries, filter]);
 
   return (
     <ImageBackground
@@ -158,7 +134,6 @@ export default function Logbook() {
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: "center" }}>
           <Image source={require("../../src/assets/logo.png")} style={styles.logo} resizeMode="contain" />
-          
           <Text style={styles.title}>Journal de Bord Numérique</Text>
         </View>
 
@@ -169,15 +144,18 @@ export default function Logbook() {
         </View>
 
         <View style={{ marginTop: 14, gap: 12 }}>
-          {shown.map((e) => (
-            <EntryCard key={e.id} e={e} />
-          ))}
+          {entries.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>ماكايناش entries دابا. زيد وحدة من +</Text>
+            </View>
+          ) : (
+            entries.map((e, idx) => <EntryCard key={e.id || idx} e={e} />)
+          )}
         </View>
 
         <View style={{ height: 90 }} />
       </ScrollView>
 
-      {/* زر + كيمشي لنفس صفحة add */}
       <Pressable
         onPress={() => router.push("/(tabs)/add-capture?from=logbook")}
         style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.98 }] }]}
@@ -190,10 +168,7 @@ export default function Logbook() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(10, 25, 45, 0.35)",
-  },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10, 25, 45, 0.35)" },
 
   topBar: { paddingTop: 52, paddingHorizontal: 16 },
   backBtn: {
@@ -213,7 +188,6 @@ const styles = StyleSheet.create({
   container: { paddingHorizontal: 18, paddingTop: 10 },
 
   logo: { width: 140, height: 140, marginBottom: 6 },
-  
   title: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 8 },
 
   chipsRow: { marginTop: 14, flexDirection: "row", gap: 10, justifyContent: "center" },
@@ -256,6 +230,15 @@ const styles = StyleSheet.create({
 
   rowInfo: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
   infoText: { color: "rgba(255,255,255,0.85)", fontWeight: "800", fontSize: 12 },
+
+  emptyBox: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  emptyText: { color: "rgba(255,255,255,0.8)", fontWeight: "800", textAlign: "center" },
 
   fab: {
     position: "absolute",

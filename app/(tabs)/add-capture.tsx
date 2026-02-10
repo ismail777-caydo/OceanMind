@@ -15,42 +15,31 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type Entry = {
-  id: string;
-  dateTitle: string;
-  time: string;
-  species: string;
-  weightKg: string;
-  city: string;
-  zone: string;
-  legal: boolean;
-};
+const BASE_URL = "http://192.168.11.114:8000"; // ✅ بدل IP ديال PC
 
-const STORAGE_KEY = "oceanmind_logbook_entries_v1";
 const SPECIES = ["Sardine", "Maquereau", "Dorade", "Anchois", "Thon"];
+const TOKEN_KEY = "OCEANMIND_TOKEN";
 
 export default function AddCapture() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    species?: string;
-    weightKg?: string;
-    zone?: string;
-    from?: string;
-  }>();
+  const params = useLocalSearchParams();
 
-  const [species, setSpecies] = useState(params.species ?? "");
+  const [species, setSpecies] = useState((params.species as string) ?? "");
   const [showSpeciesList, setShowSpeciesList] = useState(false);
 
-  const [qty, setQty] = useState(params.weightKg ?? "");
+  const [qty, setQty] = useState((params.weightKg as string) ?? "");
   const [sizeCm, setSizeCm] = useState("");
-  const [zone, setZone] = useState(params.zone ?? "Larache, Zone Nord");
+  const [zone, setZone] = useState((params.zone as string) ?? "Larache, Zone Nord");
 
-  const [dateStr] = useState("02/05/2026");
-  const [timeStr] = useState("11:39 PM");
+  const [dateStr] = useState("2026-02-09"); // ✅ دابا ثابت (من بعد نزيدو date picker)
+  const [timeStr] = useState("11:39 PM");   // ✅ ثابت (من بعد نزيدو time picker)
 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
-  const canSave = useMemo(() => species.trim().length > 0 && qty.trim().length > 0, [species, qty]);
+  const canSave = useMemo(
+    () => species.trim().length > 0 && qty.trim().length > 0,
+    [species, qty]
+  );
 
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -66,40 +55,68 @@ export default function AddCapture() {
     if (!res.canceled) setPhotoUri(res.assets[0].uri);
   };
 
-  const save = async () => {
-    if (!canSave) {
-      Alert.alert("Erreur", "عمر Espèce و Quantité.");
+const save = async () => {
+  if (!canSave) {
+    Alert.alert("Erreur", "عمر Espèce و Quantité.");
+    return;
+  }
+
+  const parts = zone.split(",");
+  const city = (parts[0] ?? "Larache").trim();
+  const zoneName = (parts[1] ?? "Zone Nord").trim();
+
+  const body = {
+    city,
+    zone: zoneName,
+    dateISO: dateStr,
+    timeStr: timeStr,
+    species: species.trim(),
+    weightKg: qty.trim(),
+    sizeCm: sizeCm ? sizeCm.trim() : null,
+    photoUri: photoUri ?? null,
+    legal: true,
+  };
+
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+
+    // ✅ LOGS قبل fetch
+    console.log("ADD URL =>", `${BASE_URL}/logbook/add`);
+    console.log("ADD BODY =>", body);
+    console.log("ADD TOKEN =>", token ? "YES" : "NO");
+
+    const res = await fetch(`${BASE_URL}/logbook/add`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch (err) {
+      data = { ok: false, message: "Response is not JSON" };
+    }
+
+    // ✅ LOGS بعد fetch
+    console.log("ADD STATUS =>", res.status);
+    console.log("ADD RAW =>", data);
+
+    if (!res.ok || !data?.ok) {
+      Alert.alert("Erreur", data?.message || `Save failed (${res.status})`);
       return;
     }
 
-    // نخرجو city/zone من النص "Larache, Zone Nord"
-    const parts = zone.split(",");
-    const city = (parts[0] ?? "Larache").trim();
-    const zoneName = (parts[1] ?? "Zone Nord").trim();
+    router.replace("/(tabs)/logbook");
+  } catch (e: any) {
+    console.log("ADD ERROR =>", e?.message || e);
+    Alert.alert("Erreur", "ماقدّرتش نرسل entry للسيرفر.");
+  }
+};
 
-    const newEntry: Entry = {
-      id: String(Date.now()),
-      dateTitle: "5 Février 2026", // دابا UI ثابت (من بعد نخدمو date picker)
-      time: timeStr,
-      species: species.trim(),
-      weightKg: qty.trim(),
-      city,
-      zone: zoneName,
-      legal: true, // دابا front فقط
-    };
-
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const current: Entry[] = raw ? (JSON.parse(raw) as Entry[]) : [];
-      const updated = [newEntry, ...current];
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-
-      // نمشيو مباشرة لصفحة Journal باش تبان entry
-      router.replace("/(tabs)/logbook");
-    } catch (e) {
-      Alert.alert("Erreur", "ماقدّرتش نحفظ entry.");
-    }
-  };
 
   return (
     <ImageBackground
@@ -188,14 +205,14 @@ export default function AddCapture() {
             <Ionicons name="pin" size={16} color="#2dd4bf" />
           </View>
 
-          {/* Date + Heure (UI) */}
+          {/* Date + Heure */}
           <View style={styles.twoCols}>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>
                 <Ionicons name="calendar-outline" size={14} color="#fbbf24" /> Date
               </Text>
               <View style={styles.select}>
-                <Text style={styles.selectText}>02/05/2026</Text>
+                <Text style={styles.selectText}>{dateStr}</Text>
                 <Ionicons name="calendar" size={16} color="rgba(255,255,255,0.85)" />
               </View>
             </View>
@@ -222,13 +239,6 @@ export default function AddCapture() {
           </Pressable>
 
           {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} /> : null}
-        </View>
-
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.75)" />
-          <Text style={styles.infoText}>
-            Les données sont utilisées pour améliorer les recommandations IA.
-          </Text>
         </View>
 
         <Pressable
@@ -340,19 +350,6 @@ const styles = StyleSheet.create({
   photoText: { color: "#fff", fontWeight: "900", fontSize: 12 },
 
   preview: { marginTop: 12, width: "100%", height: 170, borderRadius: 14 },
-
-  infoBox: {
-    marginTop: 12,
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  infoText: { flex: 1, color: "rgba(255,255,255,0.75)", fontWeight: "800", fontSize: 11, lineHeight: 16 },
 
   saveBtn: {
     marginTop: 14,

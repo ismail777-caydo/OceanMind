@@ -13,6 +13,9 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 
+// ✅ NEW: AI service import
+import { detectFish, DetectResult } from "../../src/services/ai";
+
 type Step = "select" | "loading" | "result";
 
 export default function Detection() {
@@ -20,6 +23,9 @@ export default function Detection() {
 
   const [step, setStep] = useState<Step>("select");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  // ✅ NEW: result state
+  const [result, setResult] = useState<DetectResult | null>(null);
 
   // ✅ زر رجوع ذكي
   const handleBack = () => {
@@ -58,9 +64,18 @@ export default function Detection() {
       }
 
       if (!result.canceled) {
-        setPhotoUri(result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        setPhotoUri(uri);
         setStep("loading");
-        setTimeout(() => setStep("result"), 2500);
+
+        try {
+          const data = await detectFish(uri); // ✅ call حقيقي للسيرفر
+          setResult(data);
+          setStep("result");
+        } catch (e) {
+          Alert.alert("Erreur", "وقع مشكل فـ AI، جرّب مرة أخرى.");
+          setStep("select");
+        }
       }
     } catch (e) {
       Alert.alert("Erreur", "وقع شي مشكل فاختيار الصورة.");
@@ -95,8 +110,8 @@ export default function Detection() {
           <Text style={styles.title}>Détection des Poissons IA</Text>
 
           <Text style={styles.desc}>
-            Analyse photo du poisson pour déterminer l'espèce, la taille et la
-            légalité de la pêche.
+            Analyse photo du poisson pour déterminer l&apos;espèce, la taille et
+            la légalité de la pêche.
           </Text>
 
           <View style={styles.card}>
@@ -131,8 +146,8 @@ export default function Detection() {
           />
 
           <Text style={styles.tip}>
-            Veuillez patienter pendant que l'intelligence artificielle analyse
-            le poisson.
+            Veuillez patienter pendant que l&apos;intelligence artificielle
+            analyse le poisson.
           </Text>
         </View>
       )}
@@ -140,7 +155,7 @@ export default function Detection() {
       {/* RESULT */}
       {step === "result" && (
         <View style={styles.resultWrap}>
-          <Text style={styles.resultHeader}>Résultat de l'analyse</Text>
+          <Text style={styles.resultHeader}>Résultat de l&apos;analyse</Text>
 
           <Image
             source={
@@ -150,27 +165,52 @@ export default function Detection() {
             resizeMode="cover"
           />
 
-          <Text style={styles.fishName}>Sardine commune</Text>
+          {/* ✅ species */}
+          <Text style={styles.fishName}>{result?.species ?? "—"}</Text>
 
           <View style={styles.row}>
             <View style={styles.infoBox}>
               <Text style={styles.infoLabel}>Taille estimée</Text>
-              <Text style={styles.infoValue}>32 cm</Text>
+
+              {/* ✅ size */}
+              <Text style={styles.infoValue}>
+                {result ? `${result.sizeCm} cm` : "—"}
+              </Text>
             </View>
+
             <View style={styles.infoBox}>
               <Text style={styles.infoLabel}>Poids estimé</Text>
-              <Text style={styles.infoValue}>280 g</Text>
+
+              {/* ✅ weight */}
+              <Text style={styles.infoValue}>
+                {result ? `${result.weightG} g` : "—"}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.legalBox}>
-            <Ionicons name="checkmark-circle" size={20} color="#fff" />
-            <Text style={styles.legalText}>LÉGAL</Text>
+          {/* ✅ legal box dynamic */}
+          <View
+            style={[
+              styles.legalBox,
+              {
+                backgroundColor: result?.legal
+                  ? "rgba(34,197,94,0.85)"
+                  : "rgba(239,68,68,0.85)",
+              },
+            ]}
+          >
+            <Ionicons
+              name={result?.legal ? "checkmark-circle" : "close-circle"}
+              size={20}
+              color="#fff"
+            />
+            <Text style={styles.legalText}>
+              {result?.legal ? "LÉGAL" : "ILLÉGAL"}
+            </Text>
           </View>
 
-          <Text style={styles.ruleText}>
-            Taille minimale respectée selon la réglementation locale (20 cm).
-          </Text>
+          {/* ✅ rule text */}
+          <Text style={styles.ruleText}>{result?.rule ?? ""}</Text>
 
           <Pressable
             style={styles.btnGreen}
@@ -187,6 +227,7 @@ export default function Detection() {
             style={styles.btnGray}
             onPress={() => {
               setPhotoUri(null);
+              setResult(null);
               setStep("select");
             }}
           >
@@ -206,35 +247,34 @@ const styles = StyleSheet.create({
   },
 
   topBar: { paddingTop: 52, paddingHorizontal: 16 },
-backBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  alignSelf: "flex-start",
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
 
-  // ✅ يخليها قد المحتوى
-  width: "auto",
-  maxWidth: "80%",
+    // ✅ يخليها قد المحتوى
+    width: "auto",
+    maxWidth: "80%",
 
-  paddingHorizontal: 10,
-  paddingVertical: 8,
-  borderRadius: 800,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 800,
 
-  backgroundColor: "rgba(255,255,255,0.10)",
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
 
-  // ✅ مهم باش ما تتمددش
-  flexGrow: 0,
-  flexShrink: 0,
-},
+    // ✅ مهم باش ما تتمددش
+    flexGrow: 0,
+    flexShrink: 0,
+  },
 
- backText: {
-  color: "#fff",
-  fontWeight: "800",
-  fontSize: 12,
-  includeFontPadding: false,
-},
-
+  backText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 12,
+    includeFontPadding: false,
+  },
 
   center: {
     flex: 1,
@@ -347,7 +387,6 @@ backBtn: {
     marginTop: 12,
     height: 46,
     borderRadius: 14,
-    backgroundColor: "rgba(34,197,94,0.85)",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
