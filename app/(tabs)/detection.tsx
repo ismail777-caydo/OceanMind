@@ -1,3 +1,4 @@
+// app/(tabs)/detection.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -152,7 +153,7 @@ export default function Detection() {
             resizeMode="cover"
           />
 
-          <Text style={styles.fishName}>{result?.species ?? "—"}</Text>
+          <Text style={styles.fishName}>{result?.common_name ?? result?.species ?? "—"}</Text>
 
           <View style={styles.row}>
             <View style={styles.infoBox}>
@@ -170,25 +171,38 @@ export default function Detection() {
             </View>
           </View>
 
-          <View
-            style={[
-              styles.legalBox,
-              {
-                backgroundColor: result?.legal
-                  ? "rgba(34,197,94,0.85)"
-                  : "rgba(239,68,68,0.85)",
-              },
-            ]}
-          >
-            <Ionicons
-              name={result?.legal ? "checkmark-circle" : "close-circle"}
-              size={20}
-              color="#fff"
-            />
-            <Text style={styles.legalText}>
-              {result?.legal ? "LÉGAL" : "ILLÉGAL"}
-            </Text>
-          </View>
+          {/* ✅ FIX: legal badge true/false/null => LÉGAL/ILLÉGAL/À vérifier */}
+          {(() => {
+            const legal = result?.legal;
+
+            let label = "À vérifier";
+            let bgColor = "rgba(217,164,0,0.85)"; // أصفر
+
+            if (legal === true) {
+              label = "LÉGAL";
+              bgColor = "rgba(34,197,94,0.85)"; // أخضر
+            } else if (legal === false) {
+              label = "ILLÉGAL";
+              bgColor = "rgba(239,68,68,0.85)"; // أحمر
+            }
+
+            return (
+              <View style={[styles.legalBox, { backgroundColor: bgColor }]}>
+                <Ionicons
+                  name={
+                    legal === true
+                      ? "checkmark-circle"
+                      : legal === false
+                      ? "close-circle"
+                      : "alert-circle"
+                  }
+                  size={20}
+                  color="#fff"
+                />
+                <Text style={styles.legalText}>{label}</Text>
+              </View>
+            );
+          })()}
 
           <Text style={styles.ruleText}>{result?.rule ?? ""}</Text>
 
@@ -209,13 +223,21 @@ export default function Detection() {
                 (result as any).score ??
                 "";
 
+              const aiLegalParam =
+                result.legal === true
+                  ? "true"
+                  : result.legal === false
+                  ? "false"
+                  : "";
+
               const q =
                 `from=detection` +
-                `&species=${encodeURIComponent(result.species ?? "")}` +
+                `&species=${encodeURIComponent(result.common_name ?? result.species ?? "")}` +
                 `&weightKg=${encodeURIComponent(weightKg)}` +
                 `&sizeCm=${encodeURIComponent(String(result.sizeCm ?? ""))}` +
                 `&zone=${encodeURIComponent("Larache, Zone Nord")}` +
-                `&aiLegal=${encodeURIComponent(String(!!result.legal))}` +
+                // ✅ FIX: ما تبقاش !!result.legal (كتحوّل null => false)
+                `&aiLegal=${encodeURIComponent(aiLegalParam)}` +
                 `&aiRule=${encodeURIComponent(result.rule ?? "")}` +
                 `&aiConfidence=${encodeURIComponent(String(conf))}` +
                 `&photoUri=${encodeURIComponent(photoUri ?? "")}`;
@@ -242,7 +264,7 @@ export default function Detection() {
   );
 }
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   bg: { flex: 1 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -273,7 +295,12 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
 
-  center: { flex: 1, paddingHorizontal: 22, paddingTop: 18, alignItems: "center" },
+  center: {
+    flex: 1,
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    alignItems: "center",
+  },
 
   logo: { width: 170, height: 170, marginBottom: 6 },
   logoSmall: { width: 160, height: 160, marginBottom: 6 },
@@ -328,13 +355,36 @@ const styles = StyleSheet.create({
   },
   btnText: { color: "#fff", fontWeight: "900", fontSize: 13 },
 
-  tip: { marginTop: 12, color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  tip: {
+    marginTop: 12,
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
 
   resultWrap: { flex: 1, paddingHorizontal: 18, paddingTop: 14 },
-  resultHeader: { color: "#fff", fontSize: 18, fontWeight: "900", textAlign: "center", marginBottom: 12 },
-  resultImage: { width: "100%", height: 200, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.25)" },
+  resultHeader: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  resultImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
 
-  fishName: { marginTop: 12, color: "#fff", fontSize: 16, fontWeight: "900", textAlign: "center" },
+  fishName: {
+    marginTop: 12,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
 
   row: { flexDirection: "row", gap: 12, marginTop: 12 },
   infoBox: {

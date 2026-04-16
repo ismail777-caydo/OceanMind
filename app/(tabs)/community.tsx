@@ -27,7 +27,7 @@ export default function Community() {
 
       <View style={styles.container}>
         <Image source={require("../../src/assets/logo.png")} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.appName}>Ocean Mind</Text>
+
         <Text style={styles.title}>Communauté des Pêcheurs</Text>
 
         <View style={styles.card}>

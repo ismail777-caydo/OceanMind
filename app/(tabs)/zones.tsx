@@ -1,15 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ImageBackground,
-  ActivityIndicator,
-} from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  Image,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 type Zone = {
   id: string;
@@ -18,18 +22,20 @@ type Zone = {
   lon: number;
   radius: number; // meters (concept)
   title: string;
-  city: string;
   bestTime: string;
   species: string;
   depth: string;
   distanceKm: number;
+
+  // ✅ UI placement in percent (0..1)
+  ui: { xPct: number; yPct: number; size: number; border: number };
 };
 
 function toKm(m: number) {
   return Math.round((m / 1000) * 10) / 10;
 }
 
-// distance (Haversine)
+// Haversine distance
 function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
   const R = 6371000;
   const dLat = ((bLat - aLat) * Math.PI) / 180;
@@ -44,30 +50,70 @@ function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number) 
   return R * c;
 }
 
-// generate demo zones near user
-function generateZones(userLat: number, userLon: number): Zone[] {
-  const candidates = [
-    { dLat: 0.01, dLon: 0.015, type: "recommended" as const },
-    { dLat: -0.008, dLon: 0.012, type: "recommended" as const },
-    { dLat: 0.006, dLon: -0.018, type: "forbidden" as const },
-  ];
+const LARACHE_CENTER = { lat: 35.1930, lon: -6.1560 };
 
-  return candidates.map((c, i) => {
-    const lat = userLat + c.dLat;
-    const lon = userLon + c.dLon;
-    const distM = distanceMeters(userLat, userLon, lat, lon);
-
-    return {
-      id: String(i + 1),
-      type: c.type,
-      lat,
-      lon,
-      radius: c.type === "recommended" ? 1200 : 900,
-      title: c.type === "recommended" ? "Zone principale recommandée" : "Zone interdite",
-      city: "—",
+/**
+ * ✅ IMPORTANT:
+ * هنا فين كتحدد الدواير فين يبانوا فوق الخريطة.
+ * xPct: 0 = يسار بزاف / 1 = يمين بزاف
+ * yPct: 0 = الفوق / 1 = لتحت
+ *
+ * ✅ باش تحكم فيهم شوية:
+ * - بغيت الدائرة تطلع الفوق؟ نقص yPct شوية (مثلا 0.36 -> 0.33)
+ * - بغيت الدائرة تهبط لتحت؟ زيد yPct شوية (0.36 -> 0.40)
+ * - بغيت الدائرة تمشي لليمين؟ زيد xPct شوية (0.60 -> 0.65)
+ * - بغيت الدائرة تمشي لليسار؟ نقص xPct شوية (0.60 -> 0.55)
+ */
+function laracheZones(userLat: number, userLon: number): Zone[] {
+  const base = [
+    {
+      id: "1",
+      type: "recommended" as const,
+      lat: 35.2005,
+      lon: -6.1505,
+      title: "Zone principale recommandée",
       bestTime: "6h30 – 10h00",
       species: "Sardines / Maquereaux",
-      depth: "Profondeur moyenne : 25 m",
+      depth: "Profondeur moyenne : 18–28 m",
+
+      // ✅ COMMENT: كنقطة تحكم
+      // xPct: زيدها => تمشي يمين / نقصها => تمشي يسار
+      // yPct: زيدها => تهبط لتحت / نقصها => تطلع لفوق
+      ui: { xPct: 0.45, yPct: 0.10, size: 70, border: 10 },
+    },
+    {
+      id: "2",
+      type: "recommended" as const,
+      lat: 35.1888,
+      lon: -6.1418,
+      title: "Zone recommandée",
+      bestTime: "7h00 – 11h00",
+      species: "Anchois / Maquereaux",
+      depth: "Profondeur moyenne : 20–32 m",
+
+      // ✅ COMMENT: جرّب تبدل هادو باش تحس بالتحكم
+      ui: { xPct: 0.30, yPct: 0.40, size: 118, border: 10 },
+    },
+    {
+      id: "3",
+      type: "forbidden" as const,
+      lat: 35.1908,
+      lon: -6.1528,
+      title: "Zone interdite",
+      bestTime: "—",
+      species: "—",
+      depth: "Zone sensible / خطر",
+
+      // ✅ COMMENT: هادي حمراء (forbidden)
+      ui: { xPct: 0.55, yPct: 0.28, size: 76, border: 10 },
+    },
+  ];
+
+  return base.map((z) => {
+    const distM = distanceMeters(userLat, userLon, z.lat, z.lon);
+    return {
+      ...z,
+      radius: z.type === "recommended" ? 1200 : 900,
       distanceKm: toKm(distM),
     };
   });
@@ -77,9 +123,35 @@ export default function Zones() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
   const [place, setPlace] = useState("Localisation…");
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
+
+  // ✅ مهم باش الدواير يبقاو ثابتين: كنقيسو حجم الماب (w/h) وكنحسبو left/top بالبيكسل
+  const [mapSize, setMapSize] = useState({ w: 0, h: 0 });
+
+  // ✅ Pulse منظم (radar) ماشي عشوائي
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulse]);
 
   const recommendedZone = useMemo(() => {
     const rec = zones.filter((z) => z.type === "recommended");
@@ -87,45 +159,31 @@ export default function Zones() {
     return rec[0] ?? null;
   }, [zones]);
 
-  // ✅ Step 3: loadLocation ما كتعلقش
   const loadLocation = async () => {
     setLoading(true);
-
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setPlace("Permission GPS refusée");
+        setZones(laracheZones(LARACHE_CENTER.lat, LARACHE_CENTER.lon));
         setLoading(false);
         return;
       }
 
-      // timeout باش ما يبقاش كيتسنى
       const pos = (await Promise.race([
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 8000)
-        ),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
       ])) as any;
 
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
 
       setCoords({ lat, lon });
-
-      // ✅ Step 2: بدون reverseGeocode (معلّق)
-      // const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
-      // const first = rev?.[0];
-      // const label = first
-      //   ? `${first.city ?? first.subregion ?? first.region ?? "—"}, ${first.country ?? ""}`.trim()
-      //   : "Position détectée";
-      // setPlace(label);
-
       setPlace("Position détectée");
-
-      const z = generateZones(lat, lon).map((zz) => ({ ...zz, city: "Position détectée" }));
-      setZones(z);
+      setZones(laracheZones(lat, lon));
     } catch (e) {
-      setPlace("GPS غير متاح دابا");
+      setPlace("Larache");
+      setZones(laracheZones(LARACHE_CENTER.lat, LARACHE_CENTER.lon));
     } finally {
       setLoading(false);
     }
@@ -149,15 +207,17 @@ export default function Zones() {
           <Ionicons name="chevron-back" size={18} color="#fff" />
           <Text style={styles.backText}>Retour</Text>
         </Pressable>
+
+        <Pressable onPress={() => setShowGrid((v) => !v)} style={styles.gridBtn}>
+          <Ionicons name="grid-outline" size={16} color="#fff" />
+          <Text style={styles.gridBtnText}>{showGrid ? "Grid ON" : "Grid OFF"}</Text>
+        </Pressable>
       </View>
 
-      <View style={styles.content}>
-        
-
-        <Text style={styles.appName}>Ocean Mind</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Image source={require("../../src/assets/logo.png")} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>Carte des Zones de Pêche</Text>
 
-        {/* Location pill */}
         <View style={styles.locationPill}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Ionicons name="location-outline" size={16} color="#2dd4bf" />
@@ -166,63 +226,146 @@ export default function Zones() {
           <Ionicons name="funnel-outline" size={16} color="rgba(255,255,255,0.8)" />
         </View>
 
-        {/* Map mock */}
+        {/* ✅ MAP BOX */}
         <View style={styles.mapBox}>
-          {loading ? (
-            <View style={{ alignItems: "center" }}>
-              <ActivityIndicator size="large" color="#2dd4bf" />
-              <Text style={{ marginTop: 10, color: "rgba(255,255,255,0.8)", fontWeight: "700" }}>
-                Récupération GPS…
-              </Text>
-            </View>
-          ) : (
-            <>
-              {/* circles (fake zones) */}
-              <View style={[styles.circle, { top: 110, left: 70, borderColor: "rgba(34,197,94,0.8)" }]} />
-              <View style={[styles.circle2, { top: 150, left: 170, borderColor: "rgba(34,197,94,0.75)" }]} />
-              <View style={[styles.circle3, { top: 165, left: 205, borderColor: "rgba(239,68,68,0.75)" }]} />
-            </>
-          )}
+          <ImageBackground
+            source={require("../../src/assets/larache_map.png")}
+            style={styles.mapBg}
+            resizeMode="cover"
+            onLoadEnd={() => setMapReady(true)}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              setMapSize({ w: width, h: height });
+            }}
+          >
+            <View style={styles.mapOverlay} />
 
-          {/* Info card */}
-          <View style={styles.infoCard}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <View style={styles.dot} />
-              <Text style={styles.infoTitle}>
-                {recommendedZone ? recommendedZone.title : "Zone recommandée"}
-              </Text>
-            </View>
+            {/* ✅ GRID 10x10 */}
+            {showGrid && (
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                {Array.from({ length: 9 }).map((_, i) => {
+                  const p = ((i + 1) / 10) * 100;
+                  return (
+                    <React.Fragment key={i}>
+                      <View style={[styles.gridLineH, { top: `${p}%` }]} />
+                      <View style={[styles.gridLineV, { left: `${p}%` }]} />
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            )}
 
-            <View style={styles.infoRow}>
-              <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.infoText}>{place}</Text>
-            </View>
+            {loading || !mapReady || mapSize.w === 0 ? (
+              <View style={styles.loadingCenter}>
+                <ActivityIndicator size="large" color="#2dd4bf" />
+                <Text style={styles.loadingText}>Chargement…</Text>
+              </View>
+            ) : (
+              <>
+                {/* ✅ ZONES */}
+                {zones.map((z) => {
+                  const isRec = z.type === "recommended";
+                  const borderColor = isRec ? "rgba(34,197,94,0.80)" : "rgba(239,68,68,0.78)";
+                  const fill = isRec ? "rgba(34,197,94,0.14)" : "rgba(239,68,68,0.12)";
 
-            <View style={styles.infoRow}>
-              <Ionicons name="time" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.infoText}>Meilleur moment : 6h30 – 10h00</Text>
-            </View>
+                  // ✅ IMPORTANT:
+                  // كنحوّلو xPct/yPct => left/top بالبيكسل باش مايتهزش حسب الهاتف
+                  const leftPx = z.ui.xPct * mapSize.w;
+                  const topPx = z.ui.yPct * mapSize.h;
 
-            <View style={styles.infoRow}>
-              <Ionicons name="fish-outline" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.infoText}>Sardines / Maquereaux</Text>
-            </View>
+                  return (
+                    <View
+                      key={z.id}
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        left: leftPx,
+                        top: topPx,
 
-            <View style={styles.infoRow}>
-              <Ionicons name="water-outline" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.infoText}>Profondeur moyenne : 25 m</Text>
-            </View>
+                        // ✅ COMMENT: هاد translate كيخلّي النقطة وسط الدائرة (ماشي الزاوية)
+                        transform: [{ translateX: -z.ui.size / 2 }, { translateY: -z.ui.size / 2 }],
+                      }}
+                    >
+                      {/* ✅ PULSE (radar) */}
+                      <Animated.View
+                        style={{
+                          position: "absolute",
+                          width: z.ui.size,
+                          height: z.ui.size,
+                          borderRadius: 999,
+                          borderWidth: 2,
+                          borderColor: borderColor,
+                          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
+                          transform: [
+                            {
+                              scale: pulse.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [1, 1.35],
+                              }),
+                            },
+                          ],
+                        }}
+                      />
 
-            <View style={styles.infoRow}>
-              <Ionicons name="navigate" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.infoText}>
-                Distance : {recommendedZone ? recommendedZone.distanceKm : "—"} km
-              </Text>
-            </View>
+                      {/* ✅ STABLE CIRCLE (الثابتة) */}
+                      <View
+                        style={{
+                          width: z.ui.size,
+                          height: z.ui.size,
+                          borderRadius: 999,
+                          borderWidth: z.ui.border,
+                          borderColor,
+                          backgroundColor: fill,
+                        }}
+                      />
+                    </View>
+                  );
+                })}
+              </>
+            )}
+          </ImageBackground>
+        </View>
+
+        {/* ✅ INFO CARD تحت الخريطة */}
+        <View style={styles.infoCardBelow}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <View style={styles.dot} />
+            <Text style={styles.infoTitle}>
+              {recommendedZone ? recommendedZone.title : "Zone recommandée"}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.infoText}>Larache (concept)</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="time" size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.infoText}>
+              Meilleur moment : {recommendedZone ? recommendedZone.bestTime : "—"}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="fish-outline" size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.infoText}>{recommendedZone ? recommendedZone.species : "—"}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="water-outline" size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.infoText}>{recommendedZone ? recommendedZone.depth : "—"}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="navigate" size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.infoText}>
+              Distance : {recommendedZone ? recommendedZone.distanceKm : "—"} km
+            </Text>
           </View>
         </View>
 
-        {/* Bottom actions */}
+        {/* Buttons */}
         <View style={styles.bottomRow}>
           <Pressable style={styles.filterBtn} onPress={() => alert("Filtres (UI) فقط")}>
             <Ionicons name="funnel-outline" size={16} color="#fff" />
@@ -246,7 +389,7 @@ export default function Zones() {
             <Text style={styles.legendText}>Zone interdite</Text>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </ImageBackground>
   );
 }
@@ -258,7 +401,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(10, 25, 45, 0.35)",
   },
 
-  topBar: { paddingTop: 52, paddingHorizontal: 16 },
+  topBar: {
+    paddingTop: 52,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -273,15 +421,25 @@ const styles = StyleSheet.create({
   },
   backText: { color: "#fff", fontWeight: "800", fontSize: 12 },
 
-  content: { flex: 1, paddingHorizontal: 18, paddingTop: 8 },
-
-  appName: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "900",
-    textAlign: "center",
-    marginTop: 6,
+  gridBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
   },
+  gridBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
+
+  content: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+
   title: {
     color: "#fff",
     fontSize: 16,
@@ -289,6 +447,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
+  logo: { width: 150, height: 150, alignSelf: "center" },
 
   locationPill: {
     marginTop: 14,
@@ -306,52 +465,47 @@ const styles = StyleSheet.create({
 
   mapBox: {
     marginTop: 14,
-    flex: 1,
+    height: 260,
     borderRadius: 18,
-    backgroundColor: "rgba(10, 55, 120, 0.35)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
-    padding: 12,
     overflow: "hidden",
-    justifyContent: "center",
+  },
+  mapBg: { flex: 1 },
+
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(6, 20, 40, 0.18)",
   },
 
-  circle: {
+  loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+  loadingText: { marginTop: 10, color: "rgba(255,255,255,0.8)", fontWeight: "800" },
+
+  // Grid lines
+  gridLineH: {
     position: "absolute",
-    width: 70,
-    height: 70,
-    borderRadius: 999,
-    borderWidth: 10,
-    backgroundColor: "rgba(34,197,94,0.18)",
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
-  circle2: {
+  gridLineV: {
     position: "absolute",
-    width: 90,
-    height: 90,
-    borderRadius: 999,
-    borderWidth: 10,
-    backgroundColor: "rgba(34,197,94,0.14)",
-  },
-  circle3: {
-    position: "absolute",
-    width: 55,
-    height: 55,
-    borderRadius: 999,
-    borderWidth: 10,
-    backgroundColor: "rgba(239,68,68,0.14)",
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
 
-  infoCard: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 12,
+  infoCardBelow: {
+    marginTop: 12,
     borderRadius: 18,
     padding: 14,
     backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
+
   dot: { width: 10, height: 10, borderRadius: 99, backgroundColor: "rgba(34,197,94,0.95)" },
   infoTitle: { color: "#fff", fontWeight: "900" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
