@@ -1,6 +1,6 @@
-// src/services/captures.ts
 import { supabase } from "../lib/supabaseClient";
 import * as FileSystem from "expo-file-system/legacy";
+import { decode } from "base64-arraybuffer";
 
 function extFromUri(uri: string) {
   const clean = uri.split("?")[0];
@@ -9,13 +9,11 @@ function extFromUri(uri: string) {
   return ext || "jpg";
 }
 
-// base64 -> Uint8Array
-function base64ToUint8Array(base64: string) {
-  const binary = atob(base64);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+function getContentType(ext: string) {
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  return `image/${ext}`;
 }
 
 export async function uploadCapturePhoto(userId: string, uri: string) {
@@ -23,23 +21,30 @@ export async function uploadCapturePhoto(userId: string, uri: string) {
   const filePath = `${userId}/${Date.now()}.${ext}`;
 
   const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: "base64" as any,
+    encoding: FileSystem.EncodingType.Base64,
   });
 
-  const bytes = base64ToUint8Array(base64);
+  const arrayBuffer = decode(base64);
 
   const { error: uploadError, data } = await supabase.storage
     .from("captures")
-    .upload(filePath, bytes, {
-      contentType: `image/${ext}`,
-      upsert: true,
+    .upload(filePath, arrayBuffer, {
+      contentType: getContentType(ext),
+      upsert: false,
     });
 
-  if (uploadError) throw new Error(uploadError.message);
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
 
-  const { data: pub } = supabase.storage.from("captures").getPublicUrl(data.path);
+  const { data: pub } = supabase.storage
+    .from("captures")
+    .getPublicUrl(data.path);
 
-  return { filePath: data.path, publicUrl: pub.publicUrl };
+  return {
+    filePath: data.path,
+    publicUrl: pub.publicUrl,
+  };
 }
 
 export async function createCapture(payload: {
@@ -49,7 +54,7 @@ export async function createCapture(payload: {
   size_cm?: number | null;
   city: string;
   zone: string;
-  captured_at: string; // ISO
+  captured_at: string;
   photo_path?: string | null;
   photo_url?: string | null;
   ai_confidence?: number | null;
@@ -57,5 +62,8 @@ export async function createCapture(payload: {
   ai_rule?: string | null;
 }) {
   const { error } = await supabase.from("captures").insert(payload);
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }

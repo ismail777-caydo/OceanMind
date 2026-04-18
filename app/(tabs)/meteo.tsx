@@ -11,15 +11,37 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { getMarineWeather, MarineWeatherResponse } from "../../src/services/weather";
+import {
+  getMarineWeather,
+  MarineWeatherResponse,
+} from "../../src/services/weather";
 import { FISHING_CITIES } from "../../src/constants/cities";
 import CityPicker from "../../src/components/CityPicker";
 import { useSavedCity } from "../../src/hooks/useSavedCity";
 
-function SmallStat({ icon, label, value }: any) {
+type SmallStatProps = {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  value: string;
+};
+
+type ForecastDay = {
+  date: string;
+  day: string;
+  max: number | null;
+  min: number | null;
+  desc?: string;
+  icon?: string;
+};
+
+function SmallStat({ icon, label, value }: SmallStatProps) {
   return (
     <View style={styles.smallStat}>
-      <MaterialCommunityIcons name={icon} size={18} color="rgba(255,255,255,0.9)" />
+      <MaterialCommunityIcons
+        name={icon}
+        size={18}
+        color="rgba(255,255,255,0.9)"
+      />
       <Text style={styles.smallLabel}>{label}</Text>
       <Text style={styles.smallValue}>{value}</Text>
     </View>
@@ -34,11 +56,9 @@ function dayName(dateStr: string) {
 export default function Meteo() {
   const router = useRouter();
 
-  const {
-    selectedCity,
-    setSelectedCity,
-    ready,
-  } = useSavedCity("oceanmind_selected_city");
+  const { selectedCity, setSelectedCity, ready } = useSavedCity(
+    "oceanmind_selected_city"
+  );
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -49,35 +69,38 @@ export default function Meteo() {
     else router.replace("/(tabs)/home");
   };
 
+  const fetchWeather = async () => {
+    try {
+      setLoading(true);
+      setErr(null);
+
+      const res = await getMarineWeather(selectedCity.lat, selectedCity.lon);
+      setData(res);
+    } catch (e) {
+      console.log("weather fetch error:", e);
+      setErr(
+        "La météo marine est momentanément indisponible. Veuillez réessayer plus tard."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!ready) return;
-
-    (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
-
-        const res = await getMarineWeather(selectedCity.lat, selectedCity.lon);
-        console.log("METEO JSON =>", res);
-        setData(res);
-      } catch (e: any) {
-        setErr("Météo غير متاحة دابا. تأكد السيرفر خدام و IP صحيح.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetchWeather();
   }, [selectedCity, ready]);
 
   const current = data?.current ?? {};
   const marine = data?.marine ?? {};
-  const daily7 = Array.isArray(data?.daily_7) ? data?.daily_7 : [];
+  const daily7 = Array.isArray(data?.daily_7) ? data.daily_7 : [];
 
-  const days = useMemo(() => {
+  const days: ForecastDay[] = useMemo(() => {
     return daily7.slice(0, 7).map((d: any) => ({
       date: d.date,
       day: dayName(d.date),
-      max: d.max,
-      min: d.min,
+      max: d.max ?? null,
+      min: d.min ?? null,
       desc: d.desc,
       icon: d.icon,
     }));
@@ -107,9 +130,17 @@ export default function Meteo() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <Image source={require("../../src/assets/logo.png")} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.title}>Météo Marine IA</Text>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        <Image
+          source={require("../../src/assets/logo.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+
+        <Text style={styles.title}>Météo marine</Text>
 
         <CityPicker
           cities={FISHING_CITIES}
@@ -119,42 +150,51 @@ export default function Meteo() {
         />
 
         {loading ? (
-          <View style={{ marginTop: 18, alignItems: "center" }}>
+          <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color="#2dd4bf" />
-            <Text style={{ marginTop: 10, color: "rgba(255,255,255,0.8)", fontWeight: "800" }}>
-              Chargement météo…
-            </Text>
+            <Text style={styles.loaderText}>Chargement de la météo...</Text>
           </View>
         ) : err ? (
           <View style={styles.alertCard}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <View style={styles.alertHeader}>
               <Ionicons name="warning-outline" size={18} color="#f59e0b" />
               <Text style={styles.alertTitle}>Erreur</Text>
             </View>
+
             <Text style={styles.alertText}>{err}</Text>
+
+            <Pressable style={styles.retryBtn} onPress={fetchWeather}>
+              <Text style={styles.retryBtnText}>Réessayer</Text>
+            </Pressable>
           </View>
         ) : (
           <>
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <MaterialCommunityIcons name="weather-partly-cloudy" size={18} color="#facc15" />
+                <View style={styles.headerLeft}>
+                  <MaterialCommunityIcons
+                    name="weather-partly-cloudy"
+                    size={18}
+                    color="#facc15"
+                  />
                   <Text style={styles.cardTitle}>Conditions actuelles</Text>
-                </View>
-
-                <View style={styles.badgeSafe}>
-                  <Text style={styles.badgeText}>Sûr</Text>
                 </View>
               </View>
 
               <View style={styles.currentRow}>
                 <View>
-                  <Text style={styles.temp}>{temp != null ? `${Math.round(temp)}°C` : "—"}</Text>
+                  <Text style={styles.temp}>
+                    {temp != null ? `${Math.round(temp)}°C` : "—"}
+                  </Text>
                   <Text style={styles.subText}>{descNow}</Text>
                 </View>
 
                 <View style={styles.bigIconBox}>
-                  <MaterialCommunityIcons name={iconNow as any} size={24} color="#fff" />
+                  <MaterialCommunityIcons
+                    name={iconNow as keyof typeof MaterialCommunityIcons.glyphMap}
+                    size={24}
+                    color="#fff"
+                  />
                 </View>
               </View>
 
@@ -162,60 +202,42 @@ export default function Meteo() {
                 <SmallStat
                   icon="weather-windy"
                   label="Vent"
-                  value={wind != null ? `${Math.round(wind)} km/h\n${windDir ?? ""}` : "—"}
+                  value={
+                    wind != null
+                      ? `${Math.round(wind)} km/h${windDir ? `\n${windDir}` : ""}`
+                      : "—"
+                  }
                 />
+
                 <SmallStat
                   icon="waves"
                   label="Vagues"
-                  value={wave != null ? `${wave} m\nCalme` : "—"}
+                  value={wave != null ? `${wave} m` : "—"}
                 />
+
                 <SmallStat
                   icon="thermometer-water"
-                  label="Eau"
-                  value={seaTemp != null ? `${Math.round(seaTemp)}°C\nNormale` : "—"}
+                  label="Température eau"
+                  value={seaTemp != null ? `${Math.round(seaTemp)}°C` : "—"}
                 />
               </View>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Prévisions 7 jours</Text>
+              <Text style={styles.cardTitle}>Prévisions sur 7 jours</Text>
 
-              <View style={{ marginTop: 12, gap: 10 }}>
-                {days.map((d: any) => (
+              <View style={styles.daysWrap}>
+                {days.map((d) => (
                   <View key={d.date} style={styles.dayRow}>
                     <Text style={styles.dayName}>{d.day}</Text>
                     <Text style={styles.dayDate}>{d.date}</Text>
                     <View style={{ flex: 1 }} />
                     <Text style={styles.dayTemp}>
-                      {d.min != null ? Math.round(d.min) : "—"}° / {d.max != null ? Math.round(d.max) : "—"}°
+                      {d.min != null ? Math.round(d.min) : "—"}° /{" "}
+                      {d.max != null ? Math.round(d.max) : "—"}°
                     </Text>
                   </View>
                 ))}
-              </View>
-            </View>
-
-            <View style={[styles.card, styles.cardBlue]}>
-              <View style={styles.cardHeader}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <MaterialCommunityIcons name="robot-outline" size={18} color="#fff" />
-                  <Text style={styles.cardTitle}>Prévisions IA</Text>
-                </View>
-              </View>
-
-              <Text style={styles.strongText}>Conditions favorables pour la pêche</Text>
-
-              <View style={styles.pillRow}>
-                <View style={styles.pill}>
-                  <Text style={styles.pillLabel}>Fenêtre recommandée</Text>
-                  <Text style={styles.pillValue}>06h00 – 10h30</Text>
-                </View>
-
-                <View style={[styles.pill, styles.pillRisk]}>
-                  <Text style={styles.pillLabel}>Niveau de risque</Text>
-                  <View style={styles.riskChip}>
-                    <Text style={styles.riskText}>Faible</Text>
-                  </View>
-                </View>
               </View>
             </View>
           </>
@@ -229,8 +251,10 @@ export default function Meteo() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10, 25, 45, 0.35)" },
-
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10, 25, 45, 0.35)",
+  },
   topBar: { paddingTop: 52, paddingHorizontal: 16 },
   backBtn: {
     flexDirection: "row",
@@ -245,13 +269,24 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
   },
   backText: { color: "#fff", fontWeight: "800", fontSize: 12 },
-
   container: { paddingHorizontal: 18, paddingTop: 12 },
-
   logo: { width: 150, height: 150, alignSelf: "center" },
-
-  title: { color: "#fff", fontSize: 18, fontWeight: "900", textAlign: "center", marginTop: 10 },
-
+  title: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "center",
+    marginTop: 10,
+  },
+  loaderWrap: {
+    marginTop: 18,
+    alignItems: "center",
+  },
+  loaderText: {
+    marginTop: 10,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "800",
+  },
   card: {
     marginTop: 14,
     borderRadius: 20,
@@ -260,21 +295,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-  cardBlue: {
-    backgroundColor: "rgba(29, 78, 216, 0.25)",
-    borderColor: "rgba(147, 197, 253, 0.25)",
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
-
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  cardTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
-
-  badgeSafe: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: "rgba(34,197,94,0.75)" },
-  badgeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
-  currentRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  temp: { color: "#fff", fontSize: 28, fontWeight: "900" },
-  subText: { marginTop: 4, color: "rgba(255,255,255,0.8)", fontWeight: "700" },
-
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  cardTitle: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 14,
+  },
+  currentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  temp: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "900",
+  },
+  subText: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "700",
+  },
   bigIconBox: {
     width: 44,
     height: 44,
@@ -285,8 +337,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  statRow: { flexDirection: "row", gap: 10, marginTop: 8 },
+  statRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+  },
   smallStat: {
     flex: 1,
     borderRadius: 16,
@@ -296,9 +351,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  smallLabel: { marginTop: 6, color: "rgba(255,255,255,0.7)", fontWeight: "800", fontSize: 11 },
-  smallValue: { marginTop: 4, color: "#fff", fontWeight: "900", fontSize: 12, lineHeight: 16 },
-
+  smallLabel: {
+    marginTop: 6,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
+  smallValue: {
+    marginTop: 4,
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  daysWrap: {
+    marginTop: 12,
+    gap: 10,
+  },
   dayRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -309,34 +378,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  dayName: { color: "#fff", fontWeight: "900", width: 46, textTransform: "capitalize" },
-  dayDate: { color: "rgba(255,255,255,0.72)", fontWeight: "800", fontSize: 11 },
-  dayTemp: { color: "#fff", fontWeight: "900" },
-
-  strongText: { color: "#fff", fontWeight: "900", marginBottom: 10 },
-  pillRow: { flexDirection: "row", gap: 10 },
-  pill: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 12,
-    backgroundColor: "rgba(0,0,0,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+  dayName: {
+    color: "#fff",
+    fontWeight: "900",
+    width: 46,
+    textTransform: "capitalize",
   },
-  pillRisk: { alignItems: "flex-start" },
-  pillLabel: { color: "rgba(255,255,255,0.7)", fontWeight: "800", fontSize: 11 },
-  pillValue: { marginTop: 8, color: "#fff", fontWeight: "900", fontSize: 12 },
-
-  riskChip: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: "rgba(34,197,94,0.75)",
+  dayDate: {
+    color: "rgba(255,255,255,0.72)",
+    fontWeight: "800",
+    fontSize: 11,
   },
-  riskText: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
+  dayTemp: {
+    color: "#fff",
+    fontWeight: "900",
+  },
   alertCard: {
     marginTop: 14,
     borderRadius: 18,
@@ -345,6 +401,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(245, 158, 11, 0.22)",
   },
-  alertTitle: { color: "#fff", fontWeight: "900" },
-  alertText: { color: "rgba(255,255,255,0.78)", fontWeight: "700", lineHeight: 16 },
+  alertHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  alertTitle: {
+    color: "#fff",
+    fontWeight: "900",
+  },
+  alertText: {
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  retryBtn: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(56,189,248,0.95)",
+  },
+  retryBtnText: {
+    color: "#fff",
+    fontWeight: "900",
+  },
 });

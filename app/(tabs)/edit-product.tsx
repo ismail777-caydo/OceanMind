@@ -9,10 +9,12 @@ import {
   ScrollView,
   ImageBackground,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../src/lib/supabaseClient";
+import { useAuth } from "../../src/auth/AuthContext";
 
 const PRODUCT_CATEGORIES = [
   "Filets",
@@ -26,6 +28,7 @@ const PRODUCT_CATEGORIES = [
 export default function EditProduct() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { user, logged, ready } = useAuth();
 
   const productId = String(params.id || "");
 
@@ -40,6 +43,7 @@ export default function EditProduct() {
   const [sellerName, setSellerName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
@@ -47,50 +51,95 @@ export default function EditProduct() {
   };
 
   useEffect(() => {
-    if (productId) {
-      fetchProduct();
-    }
-  }, [productId]);
+    if (!ready) return;
 
-  const fetchProduct = async () => {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .eq("id", productId)
-      .single();
-
-    if (error) {
-      console.log("fetch product error:", error);
-      Alert.alert("Erreur", error.message);
+    if (!logged || !user) {
+      Alert.alert("Accès refusé", "Tu dois te connecter.");
+      router.replace("/");
       return;
     }
 
-    if (data) {
+    if (!productId) {
+      Alert.alert("Erreur", "Produit introuvable.");
+      router.replace("/(tabs)/store");
+      return;
+    }
+
+    fetchProduct();
+  }, [ready, logged, user, productId]);
+
+  const fetchProduct = async () => {
+    if (!user?.id) {
+      setPageLoading(false);
+      return;
+    }
+
+    try {
+      setPageLoading(true);
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("id", productId)
+        .single();
+
+      if (error || !data) {
+        console.log("fetch product error:", error);
+        Alert.alert("Erreur", error?.message || "Produit introuvable.");
+        router.replace("/(tabs)/store");
+        return;
+      }
+
+      if (data.user_id !== user.id) {
+        Alert.alert("Accès refusé", "Tu ne peux modifier que ton propre produit.");
+        router.replace("/(tabs)/store");
+        return;
+      }
+
       setTitle(data.title || "");
       setDescription(data.description || "");
       setPrice(String(data.price ?? ""));
       setCondition((data.condition as "new" | "used") || "used");
-      setCategory(data.category || "");
+      setCategory(data.category || "Filets");
       setCity(data.city || "");
       setPhone(data.phone || "");
       setWhatsapp(data.whatsapp || "");
       setSellerName(data.seller_name || "");
       setImageUrl(data.image_url || "");
+    } catch (e: any) {
+      console.log("fetch product global error:", e);
+      Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
+      router.replace("/(tabs)/store");
+    } finally {
+      setPageLoading(false);
     }
   };
 
   const handleUpdate = async () => {
+    if (!ready || !logged || !user) {
+      Alert.alert("Erreur", "Utilisateur non connecté.");
+      router.replace("/");
+      return;
+    }
+
     if (
-      !title ||
-      !description ||
-      !price ||
-      !category ||
-      !city ||
-      !phone ||
-      !whatsapp ||
-      !sellerName
+      !title.trim() ||
+      !description.trim() ||
+      !price.trim() ||
+      !category.trim() ||
+      !city.trim() ||
+      !phone.trim() ||
+      !whatsapp.trim() ||
+      !sellerName.trim()
     ) {
       Alert.alert("Erreur", "Merci de remplir tous les champs obligatoires.");
+      return;
+    }
+
+    const numericPrice = Number(price);
+
+    if (Number.isNaN(numericPrice) || numericPrice <= 0) {
+      Alert.alert("Erreur", "Merci d'entrer un prix valide.");
       return;
     }
 
@@ -100,19 +149,20 @@ export default function EditProduct() {
       const { error } = await supabase
         .from("products")
         .update({
-          title,
-          description,
-          price: Number(price),
+          title: title.trim(),
+          description: description.trim(),
+          price: numericPrice,
           condition,
-          category,
-          city,
-          phone,
-          whatsapp,
+          category: category.trim(),
+          city: city.trim(),
+          phone: phone.trim(),
+          whatsapp: whatsapp.trim(),
           has_whatsapp: true,
-          seller_name: sellerName,
-          image_url: imageUrl || null,
+          seller_name: sellerName.trim(),
+          image_url: imageUrl.trim() || null,
         })
-        .eq("id", productId);
+        .eq("id", productId)
+        .eq("user_id", user.id);
 
       if (error) {
         console.log("update error:", error);
@@ -121,7 +171,10 @@ export default function EditProduct() {
       }
 
       Alert.alert("Succès", "Produit modifié avec succès !");
-      router.replace("/(tabs)/store");
+      router.replace({
+        pathname: "/(tabs)/product-details",
+        params: { id: productId },
+      });
     } catch (e: any) {
       console.log("global error:", e);
       Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
@@ -129,6 +182,14 @@ export default function EditProduct() {
       setLoading(false);
     }
   };
+
+  if (!ready || pageLoading) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#38bdf8" />
+      </View>
+    );
+  }
 
   return (
     <ImageBackground
@@ -199,20 +260,14 @@ export default function EditProduct() {
           <Text style={styles.label}>Condition</Text>
           <View style={styles.row}>
             <Pressable
-              style={[
-                styles.choiceBtn,
-                condition === "new" && styles.choiceActive,
-              ]}
+              style={[styles.choiceBtn, condition === "new" && styles.choiceActive]}
               onPress={() => setCondition("new")}
             >
               <Text style={styles.choiceText}>New</Text>
             </Pressable>
 
             <Pressable
-              style={[
-                styles.choiceBtn,
-                condition === "used" && styles.choiceActive,
-              ]}
+              style={[styles.choiceBtn, condition === "used" && styles.choiceActive]}
               onPress={() => setCondition("used")}
             >
               <Text style={styles.choiceText}>Used</Text>
@@ -221,7 +276,6 @@ export default function EditProduct() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Catégorie</Text>
-
             <View style={styles.categoryGrid}>
               {PRODUCT_CATEGORIES.map((cat) => (
                 <Pressable
@@ -317,16 +371,20 @@ export default function EditProduct() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0b1220",
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(10, 25, 45, 0.35)",
   },
-
   topBar: {
     paddingTop: 52,
     paddingHorizontal: 16,
   },
-
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -339,24 +397,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
   },
-
   backText: {
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
   },
-
   container: {
     paddingHorizontal: 18,
     paddingTop: 12,
   },
-
   logo: {
     width: 150,
     height: 150,
     alignSelf: "center",
   },
-
   title: {
     color: "#fff",
     fontSize: 18,
@@ -364,7 +418,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 10,
   },
-
   subtitle: {
     color: "rgba(255,255,255,0.78)",
     textAlign: "center",
@@ -373,7 +426,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 14,
   },
-
   card: {
     marginTop: 8,
     borderRadius: 22,
@@ -382,18 +434,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-
   inputGroup: {
     marginBottom: 12,
   },
-
   label: {
     color: "#fff",
     fontWeight: "800",
     marginBottom: 8,
     fontSize: 13,
   },
-
   input: {
     backgroundColor: "rgba(255,255,255,0.94)",
     borderRadius: 14,
@@ -402,18 +451,15 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     fontWeight: "700",
   },
-
   textarea: {
     minHeight: 100,
     textAlignVertical: "top",
   },
-
   row: {
     flexDirection: "row",
     gap: 10,
     marginBottom: 14,
   },
-
   choiceBtn: {
     flex: 1,
     backgroundColor: "rgba(255,255,255,0.10)",
@@ -423,22 +469,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-
   choiceActive: {
     backgroundColor: "rgba(34,197,94,0.88)",
   },
-
   choiceText: {
     color: "#fff",
     fontWeight: "900",
   },
-
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
-
   categoryOption: {
     backgroundColor: "rgba(255,255,255,0.10)",
     paddingHorizontal: 12,
@@ -447,17 +489,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-
   categoryOptionActive: {
     backgroundColor: "rgba(56, 189, 248, 0.95)",
   },
-
   categoryOptionText: {
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
   },
-
   saveBtn: {
     backgroundColor: "#f59e0b",
     padding: 14,
@@ -468,7 +507,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-
   saveText: {
     color: "#fff",
     textAlign: "center",

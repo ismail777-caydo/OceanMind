@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
 import { AuthProvider, useAuth } from "../src/auth/AuthContext";
 
 function RootNav() {
@@ -12,12 +13,23 @@ function RootNav() {
 
     const inTabs = segments[0] === "(tabs)";
 
-    // إلى ماشي logged وراه داخل tabs -> رجّعو للّوغين
-    if (!logged && inTabs) router.replace("/");
+    if (!logged && inTabs) {
+      router.replace("/");
+      return;
+    }
 
-    // إلى logged وراه فـ root (login/register) -> دخّلو للـ tabs/home
-    if (logged && !inTabs) router.replace("/(tabs)/home");
-  }, [logged, ready, segments]);
+    if (logged && !inTabs) {
+      router.replace("/(tabs)/home");
+    }
+  }, [logged, ready, segments, router]);
+
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#0b1220" }}>
+        <ActivityIndicator size="large" color="#38bdf8" />
+      </View>
+    );
+  }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

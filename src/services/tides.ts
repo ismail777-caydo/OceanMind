@@ -43,8 +43,16 @@ export type TidesWavesResponse = {
 };
 
 export async function getTidesAndWaves(lat: number, lon: number) {
+  if (!AI_BASE) {
+    throw new Error("AI_BASE is not configured");
+  }
+
   const url = `${AI_BASE}/marine/tides-waves?lat=${lat}&lon=${lon}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Tides/Waves error: ${res.status}`);
+
+  if (!res.ok) {
+    throw new Error(`Tides/Waves error: ${res.status}`);
+  }
+
   return (await res.json()) as TidesWavesResponse;
 }

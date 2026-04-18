@@ -9,6 +9,7 @@ import {
   ScrollView,
   Image,
   ImageBackground,
+  ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -16,6 +17,7 @@ import { decode } from "base64-arraybuffer";
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../src/lib/supabaseClient";
+import { useAuth } from "../../src/auth/AuthContext";
 
 const PRODUCT_CATEGORIES = [
   "Filets",
@@ -30,6 +32,7 @@ const MAX_IMAGES = 6;
 
 export default function AddProduct() {
   const router = useRouter();
+  const { user, logged, ready } = useAuth();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -51,19 +54,25 @@ export default function AddProduct() {
   };
 
   useEffect(() => {
+    if (!ready) return;
+
+    if (!logged || !user) {
+      Alert.alert("Accès refusé", "Tu dois te connecter pour ajouter un produit.");
+      router.replace("/");
+      return;
+    }
+
     loadProfileDefaults();
-  }, []);
+  }, [ready, logged, user]);
 
   const loadProfileDefaults = async () => {
+    if (!user?.id) {
+      setProfileLoading(false);
+      return;
+    }
+
     try {
       setProfileLoading(true);
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) return;
 
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -98,6 +107,7 @@ export default function AddProduct() {
     }
 
     const remaining = MAX_IMAGES - selectedImages.length;
+
     if (remaining <= 0) {
       Alert.alert("Limite atteinte", "Tu peux ajouter jusqu'à 6 images.");
       return;
@@ -128,6 +138,7 @@ export default function AddProduct() {
 
     const fileExt = uri.split(".").pop()?.toLowerCase() || "jpg";
     const safeExt = fileExt === "jpg" ? "jpeg" : fileExt;
+
     const fileName = `${userId}/${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}.${fileExt}`;
@@ -144,40 +155,43 @@ export default function AddProduct() {
       throw uploadError;
     }
 
-    const { data } = supabase.storage
-      .from("product-images")
-      .getPublicUrl(fileName);
+    const { data } = supabase.storage.from("product-images").getPublicUrl(fileName);
 
     return data.publicUrl;
   };
 
   const handleAddProduct = async () => {
+    if (!ready) return;
+
+    if (!logged || !user) {
+      Alert.alert("Erreur", "Utilisateur non connecté.");
+      router.replace("/");
+      return;
+    }
+
     if (
-      !title ||
-      !description ||
-      !price ||
-      !category ||
-      !city ||
-      !phone ||
-      !whatsapp ||
-      !sellerName
+      !title.trim() ||
+      !description.trim() ||
+      !price.trim() ||
+      !category.trim() ||
+      !city.trim() ||
+      !phone.trim() ||
+      !whatsapp.trim() ||
+      !sellerName.trim()
     ) {
       Alert.alert("Erreur", "Merci de remplir tous les champs obligatoires.");
       return;
     }
 
+    const numericPrice = Number(price);
+
+    if (Number.isNaN(numericPrice) || numericPrice <= 0) {
+      Alert.alert("Erreur", "Merci d'entrer un prix valide.");
+      return;
+    }
+
     try {
       setLoading(true);
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        Alert.alert("Erreur", "Utilisateur non connecté.");
-        return;
-      }
 
       let uploadedUrls: string[] = [];
 
@@ -195,16 +209,16 @@ export default function AddProduct() {
         .from("products")
         .insert({
           user_id: user.id,
-          title,
-          description,
-          price: Number(price),
+          title: title.trim(),
+          description: description.trim(),
+          price: numericPrice,
           condition,
-          category,
-          city,
-          phone,
-          whatsapp,
+          category: category.trim(),
+          city: city.trim(),
+          phone: phone.trim(),
+          whatsapp: whatsapp.trim(),
           has_whatsapp: true,
-          seller_name: sellerName,
+          seller_name: sellerName.trim(),
           image_url: coverImage,
         })
         .select("id")
@@ -245,6 +259,14 @@ export default function AddProduct() {
       setLoading(false);
     }
   };
+
+  if (!ready) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#38bdf8" />
+      </View>
+    );
+  }
 
   return (
     <ImageBackground
@@ -425,12 +447,14 @@ export default function AddProduct() {
               {selectedImages.map((uri, index) => (
                 <View key={`${uri}-${index}`} style={styles.previewWrap}>
                   <Image source={{ uri }} style={styles.previewImage} />
+
                   <Pressable
                     style={styles.removeBtn}
                     onPress={() => removeImage(index)}
                   >
                     <Ionicons name="close" size={14} color="#fff" />
                   </Pressable>
+
                   {index === 0 && (
                     <View style={styles.coverBadge}>
                       <Text style={styles.coverBadgeText}>Cover</Text>
@@ -471,6 +495,12 @@ export default function AddProduct() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0b1220",
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(10, 25, 45, 0.35)",

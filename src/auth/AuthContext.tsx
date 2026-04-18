@@ -1,12 +1,11 @@
 // src/auth/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabaseClient";
 
 type User = {
   id: string;
   email: string;
-  //name?: string;
-  //phone?: string;
 };
 
 type RegisterPayload = {
@@ -14,13 +13,13 @@ type RegisterPayload = {
   phone: string;
   email: string;
   password: string;
+  city: string;
 };
 
 type AuthContextType = {
   ready: boolean;
   logged: boolean;
   user: User | null;
-
   login: (email: string, password: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
@@ -28,84 +27,171 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const STORAGE_KEY = "user";
+
+function formatUser(u: any): User {
+  return {
+    id: u.id,
+    email: u.email ?? "",
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   const logged = !!user;
 
-  // ✅ load session on app start + listen to auth changes
   useEffect(() => {
-    // 1) initial session
-    supabase.auth
-      .getSession()
-      .then(({ data, error }) => {
-        if (error) console.warn("getSession error:", error.message);
+    let mounted = true;
 
-        const u = data.session?.user;
-        if (u) {
-          setUser({
-            id: u.id,
-            email: u.email ?? "",
-          });
+    const loadUser = async () => {
+      try {
+        // Supabase hiya source of truth
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("getSession error:", error.message);
+        }
+
+        const sessionUser = data.session?.user;
+
+        if (sessionUser) {
+          const formattedUser = formatUser(sessionUser);
+
+          if (mounted) {
+            setUser(formattedUser);
+          }
+
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
         } else {
+          // fallback mn AsyncStorage
+          const savedUser = await AsyncStorage.getItem(STORAGE_KEY);
+
+          if (savedUser) {
+            const parsedUser = JSON.parse(savedUser);
+
+            if (mounted) {
+              setUser(parsedUser);
+            }
+          } else {
+            if (mounted) {
+              setUser(null);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("loadUser error:", err);
+
+        if (mounted) {
           setUser(null);
         }
-      })
-      .finally(() => setReady(true));
+      } finally {
+        if (mounted) {
+          setReady(true);
+        }
+      }
+    };
 
-    // 2) subscribe to login/logout/refresh
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user;
-      if (u) {
-        setUser({
-          id: u.id,
-          email: u.email ?? "",
-        });
-      } else {
-        setUser(null);
+    loadUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        const sessionUser = session?.user;
+
+        if (sessionUser) {
+          const formattedUser = formatUser(sessionUser);
+
+          if (mounted) {
+            setUser(formattedUser);
+          }
+
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+        } else {
+          if (mounted) {
+            setUser(null);
+          }
+
+          await AsyncStorage.removeItem(STORAGE_KEY);
+        }
+      } catch (err) {
+        console.warn("onAuthStateChange error:", err);
       }
     });
 
     return () => {
-      sub.subscription.unsubscribe();
+      mounted = false;
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    // user state will update automatically via onAuthStateChange
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const sessionUser = data.user;
+
+    if (sessionUser) {
+      const formattedUser = formatUser(sessionUser);
+      setUser(formattedUser);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+    }
   };
 
   const register = async (payload: RegisterPayload) => {
-    const { name, phone, email, password } = payload;
+    const { name, phone, city, email, password } = payload;
 
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw new Error(error.message);
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+    });
 
-    // OPTIONAL (recommended): save name/phone into profiles table
-    // If you didn't create profiles table yet, you can remove this block.
-    const { data: sessionData } = await supabase.auth.getSession();
-    const u = sessionData.session?.user;
+    if (error) {
+      throw new Error(error.message);
+    }
 
-    if (u) {
-      const { error: profileErr } = await supabase
-        .from("profiles")
-        .upsert({ id: u.id, full_name: name, phone });
+    const newUser = data.user;
 
-      if (profileErr) throw new Error(profileErr.message);
+    // Ila kan user raj3 men signUp, save profile
+    if (newUser) {
+      const { error: profileErr } = await supabase.from("profiles").upsert({
+        id: newUser.id,
+        full_name: name,
+        phone,
+        city,
+      });
+
+      if (profileErr) {
+        throw new Error(profileErr.message);
+      }
     }
   };
 
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) throw new Error(error.message);
-    // user state will become null via onAuthStateChange
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    setUser(null);
+    await AsyncStorage.removeItem(STORAGE_KEY);
   };
 
   const value = useMemo(
-    () => ({ ready, logged, user, login, register, logout }),
+    () => ({
+      ready,
+      logged,
+      user,
+      login,
+      register,
+      logout,
+    }),
     [ready, logged, user]
   );
 
@@ -114,6 +200,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+
   return ctx;
 }

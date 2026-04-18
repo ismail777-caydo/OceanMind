@@ -1,4 +1,3 @@
-// app/(tabs)/add-capture.tsx
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -13,14 +12,23 @@ import {
   Text,
   TextInput,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { useAuth } from "../../src/auth/AuthContext";
 import { createCapture, uploadCapturePhoto } from "../../src/services/captures";
 
-// ✅ NEW: AI detect
-import { detectFish } from "../../src/services/ai";
-
 const SPECIES = ["Sardine", "Maquereau", "Dorade", "Anchois", "Thon"];
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString("fr-FR");
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function AddCapture() {
   const router = useRouter();
@@ -30,95 +38,88 @@ export default function AddCapture() {
   const aiLegalParam = params.aiLegal as string | undefined;
   const aiRuleParam = params.aiRule as string | undefined;
   const aiConfidenceParam = params.aiConfidence as string | undefined;
-
   const paramSizeCm = params.sizeCm as string | undefined;
   const paramPhotoUri = params.photoUri as string | undefined;
 
   const [species, setSpecies] = useState((params.species as string) ?? "");
   const [showSpeciesList, setShowSpeciesList] = useState(false);
-
   const [qty, setQty] = useState((params.weightKg as string) ?? "");
   const [sizeCm, setSizeCm] = useState(paramSizeCm ?? "");
-  const [zone] = useState((params.zone as string) ?? "Larache, Zone Nord");
-
-  const [dateStr] = useState("2026-02-09");
-  const [timeStr] = useState("11:39 PM");
-
+  const [zone] = useState((params.zone as string) ?? "Zone non précisée");
+  const [captureDate] = useState(new Date());
   const [photoUri, setPhotoUri] = useState<string | null>(
     paramPhotoUri ? String(paramPhotoUri) : null
   );
+  const [saving, setSaving] = useState(false);
 
-  const canSave = useMemo(
-    () => species.trim().length > 0 && qty.trim().length > 0,
-    [species, qty]
-  );
+  const canSave = useMemo(() => {
+    return species.trim().length > 0 && qty.trim().length > 0;
+  }, [species, qty]);
 
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
     if (!perm.granted) {
-      Alert.alert("Permission", "خصنا permission ديال الصور.");
+      Alert.alert("Permission", "L'accès à la galerie est requis.");
       return;
     }
+
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
       allowsEditing: true,
     });
-    if (!res.canceled) setPhotoUri(res.assets[0].uri);
+
+    if (!res.canceled) {
+      setPhotoUri(res.assets[0].uri);
+    }
   };
 
   const save = async () => {
+    if (saving) return;
+
     if (!canSave) {
-      Alert.alert("Erreur", "عمر Espèce و Quantité.");
+      Alert.alert("Erreur", "Veuillez renseigner l'espèce et la quantité.");
       return;
     }
 
     if (!user?.id) {
-      Alert.alert("Erreur", "خاصك تكون مسجّل الدخول.");
+      Alert.alert("Erreur", "Vous devez être connecté.");
+      return;
+    }
+
+    const weightKg = Number(qty);
+
+    if (Number.isNaN(weightKg) || weightKg <= 0) {
+      Alert.alert("Erreur", "Veuillez saisir une quantité valide.");
+      return;
+    }
+
+    const sizeValue =
+      sizeCm.trim() !== "" ? Number(sizeCm.replace(",", ".")) : null;
+
+    if (sizeCm.trim() !== "" && (Number.isNaN(sizeValue) || sizeValue! <= 0)) {
+      Alert.alert("Erreur", "Veuillez saisir une taille valide.");
       return;
     }
 
     const parts = zone.split(",");
-    const city = (parts[0] ?? "Larache").trim();
-    const zoneName = (parts[1] ?? "Zone Nord").trim();
+    const city = (parts[0] ?? "Ville non précisée").trim();
+    const zoneName = (parts[1] ?? zone).trim();
+    const capturedAtISO = captureDate.toISOString();
 
-    const capturedAtISO = new Date().toISOString();
-
-    // params القديمة (إلا كانو جايين من screen أخرى)
-    const ai_legal_param =
+    const ai_legal =
       aiLegalParam != null ? String(aiLegalParam) === "true" : null;
-    const ai_rule_param = aiRuleParam ? String(aiRuleParam) : null;
 
-    const ai_confidence_param =
+    const ai_rule = aiRuleParam ? String(aiRuleParam) : null;
+
+    const ai_confidence =
       aiConfidenceParam && String(aiConfidenceParam).trim() !== ""
         ? Number(aiConfidenceParam)
         : null;
 
     try {
-      // ✅ STEP: AI detect (إلى كانت photo موجودة)
-      let ai_species: string | null = null;
-      let ai_common_name: string | null = null;
-      let ai_confidence: number | null = ai_confidence_param;
-      let ai_legal: boolean | null = ai_legal_param;
-      let ai_rule: string | null = ai_rule_param;
-
-      if (photoUri) {
-        const result = await detectFish(photoUri);
-        console.log("AI RESULT:", result);
-
-        // expected: { species, common_name, confidence, ... }
-        ai_species = result?.species ?? null;
-        ai_common_name = result?.common_name ?? null;
-        ai_confidence =
-          typeof result?.confidence === "number" ? result.confidence : ai_confidence;
-
-        // إلا بغيتي حتى تعمّر species أوتوماتيكياً (اختياري):
-        // if (!species.trim() && ai_common_name) setSpecies(ai_common_name);
-
-        // إلا detectFish كيرجع legal/rule فالمستقبل:
-        ai_legal = typeof result?.legal === "boolean" ? result.legal : ai_legal;
-        ai_rule = typeof result?.rule === "string" ? result.rule : ai_rule;
-      }
+      setSaving(true);
 
       let photo_path: string | null = null;
       let photo_url: string | null = null;
@@ -132,29 +133,27 @@ export default function AddCapture() {
       await createCapture({
         user_id: user.id,
         species: species.trim(),
-        weight_kg: Number(qty),
-        size_cm: sizeCm ? Number(sizeCm) : null,
+        weight_kg: weightKg,
+        size_cm: sizeValue,
         city,
         zone: zoneName,
         captured_at: capturedAtISO,
         photo_path,
         photo_url,
-
-        // ✅ keep existing fields
         ai_legal,
         ai_rule,
         ai_confidence,
-
-        // ✅ optional extra fields (غير إذا createCapture/schema كيدعموهم)
-        // ai_species,
-        // ai_common_name,
       });
 
-      Alert.alert("✅", "Entry enregistrée !");
+      Alert.alert("Succès", "Entrée enregistrée avec succès.");
       router.replace("/(tabs)/logbook");
     } catch (e: any) {
-      console.log("SAVE CAPTURE ERROR FULL =>", e);
-      Alert.alert("Erreur", e?.message || JSON.stringify(e));
+      Alert.alert(
+        "Erreur",
+        e?.message || "Impossible d'enregistrer cette entrée."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -173,9 +172,16 @@ export default function AddCapture() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={{ alignItems: "center" }}>
-          <Image source={require("../../src/assets/logo.png")} style={styles.logo} resizeMode="contain" />
+          <Image
+            source={require("../../src/assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Ajouter une entrée</Text>
         </View>
 
@@ -185,9 +191,18 @@ export default function AddCapture() {
             <Text style={{ color: "#fca5a5" }}>*</Text>
           </Text>
 
-          <Pressable style={styles.select} onPress={() => setShowSpeciesList((v) => !v)}>
-            <Text style={styles.selectText}>{species ? species : "Sélectionner une espèce"}</Text>
-            <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.85)" />
+          <Pressable
+            style={styles.select}
+            onPress={() => setShowSpeciesList((v) => !v)}
+          >
+            <Text style={styles.selectText}>
+              {species ? species : "Sélectionner une espèce"}
+            </Text>
+            <Ionicons
+              name="chevron-down"
+              size={16}
+              color="rgba(255,255,255,0.85)"
+            />
           </Pressable>
 
           {showSpeciesList ? (
@@ -211,6 +226,7 @@ export default function AddCapture() {
             <MaterialCommunityIcons name="scale" size={14} color="#93c5fd" /> Quantité (kg){" "}
             <Text style={{ color: "#fca5a5" }}>*</Text>
           </Text>
+
           <TextInput
             value={qty}
             onChangeText={(t) => setQty(t.replace(",", "."))}
@@ -222,8 +238,9 @@ export default function AddCapture() {
 
           <Text style={[styles.label, { marginTop: 12 }]}>
             <MaterialCommunityIcons name="ruler" size={14} color="#c084fc" /> Taille (cm){" "}
-            <Text style={styles.optional}>(optional)</Text>
+            <Text style={styles.optional}>(optionnel)</Text>
           </Text>
+
           <TextInput
             value={sizeCm}
             onChangeText={setSizeCm}
@@ -236,6 +253,7 @@ export default function AddCapture() {
           <Text style={[styles.label, { marginTop: 12 }]}>
             <Ionicons name="location-outline" size={14} color="#34d399" /> Zone de pêche
           </Text>
+
           <View style={styles.select}>
             <Text style={styles.selectText}>{zone}</Text>
             <Ionicons name="pin" size={16} color="#2dd4bf" />
@@ -247,7 +265,7 @@ export default function AddCapture() {
                 <Ionicons name="calendar-outline" size={14} color="#fbbf24" /> Date
               </Text>
               <View style={styles.select}>
-                <Text style={styles.selectText}>{dateStr}</Text>
+                <Text style={styles.selectText}>{formatDate(captureDate)}</Text>
                 <Ionicons name="calendar" size={16} color="rgba(255,255,255,0.85)" />
               </View>
             </View>
@@ -257,7 +275,7 @@ export default function AddCapture() {
                 <Ionicons name="time-outline" size={14} color="#60a5fa" /> Heure
               </Text>
               <View style={styles.select}>
-                <Text style={styles.selectText}>{timeStr}</Text>
+                <Text style={styles.selectText}>{formatTime(captureDate)}</Text>
                 <Ionicons name="time" size={16} color="rgba(255,255,255,0.85)" />
               </View>
             </View>
@@ -265,8 +283,9 @@ export default function AddCapture() {
 
           <Text style={[styles.label, { marginTop: 12 }]}>
             <Ionicons name="image-outline" size={14} color="#fbbf24" /> Photo{" "}
-            <Text style={styles.optional}>(optional)</Text>
+            <Text style={styles.optional}>(optionnel)</Text>
           </Text>
+
           <Pressable onPress={pickPhoto} style={styles.photoBtn}>
             <Ionicons name="add-circle-outline" size={18} color="#2dd4bf" />
             <Text style={styles.photoText}>Ajouter une photo</Text>
@@ -277,13 +296,18 @@ export default function AddCapture() {
 
         <Pressable
           onPress={save}
+          disabled={!canSave || saving}
           style={({ pressed }) => [
             styles.saveBtn,
-            !canSave && { opacity: 0.6 },
+            (!canSave || saving) && { opacity: 0.6 },
             pressed && { transform: [{ scale: 0.99 }] },
           ]}
         >
-          <Text style={styles.saveText}>Enregistrer</Text>
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveText}>Enregistrer</Text>
+          )}
         </Pressable>
 
         <View style={{ height: 24 }} />
@@ -294,8 +318,10 @@ export default function AddCapture() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10, 25, 45, 0.35)" },
-
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10, 25, 45, 0.35)",
+  },
   topBar: { paddingTop: 52, paddingHorizontal: 16 },
   backBtn: {
     flexDirection: "row",
@@ -310,12 +336,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
   },
   backText: { color: "#fff", fontWeight: "800", fontSize: 12 },
-
   container: { paddingHorizontal: 18, paddingTop: 10 },
-
   logo: { width: 140, height: 140, marginBottom: 6 },
   title: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 8 },
-
   card: {
     marginTop: 14,
     borderRadius: 22,
@@ -324,10 +347,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-
-  label: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12, marginBottom: 8 },
+  label: {
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "900",
+    fontSize: 12,
+    marginBottom: 8,
+  },
   optional: { color: "rgba(255,255,255,0.6)", fontWeight: "800" },
-
   input: {
     height: 42,
     borderRadius: 14,
@@ -338,7 +364,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "900",
   },
-
   select: {
     height: 42,
     borderRadius: 14,
@@ -351,7 +376,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   selectText: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
   dropdown: {
     marginTop: 10,
     borderRadius: 14,
@@ -367,9 +391,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(255,255,255,0.10)",
   },
   dropdownText: { color: "#fff", fontWeight: "900" },
-
   twoCols: { flexDirection: "row", gap: 12, marginTop: 12 },
-
   photoBtn: {
     height: 44,
     borderRadius: 14,
@@ -382,9 +404,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   photoText: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
   preview: { marginTop: 12, width: "100%", height: 170, borderRadius: 14 },
-
   saveBtn: {
     marginTop: 14,
     height: 50,

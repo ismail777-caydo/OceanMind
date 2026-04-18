@@ -1,21 +1,18 @@
-// src/services/ai.ts
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
 export type DetectResult = {
   species?: string;
-  common_name?: string;   // ✅ زِد هادي
-  code?: string; 
+  common_name?: string;
+  code?: string;
   sizeCm?: number;
   weightG?: number;
-  legal?: boolean;
+  legal?: boolean | null;
   rule?: string;
   confidence?: number;
 };
 
-// حاول نلقاو host ديال Metro تلقائياً
 function getDevHost() {
-  // hostUri مثال: "192.168.0.110:8081"
   const hostUri =
     Constants.expoConfig?.hostUri ??
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ??
@@ -26,19 +23,22 @@ function getDevHost() {
 }
 
 function getApiBaseUrl() {
-  // 1) إذا كاين env استعملو
-  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (envUrl && envUrl.startsWith("http")) return envUrl;
+  const envUrl = process.env.EXPO_PUBLIC_AI_BASE_URL;
 
-  // 2) web => localhost
-  if (Platform.OS === "web") return "http://localhost:8000";
+  if (envUrl && envUrl.startsWith("http")) {
+    return envUrl;
+  }
 
-  // 3) Expo Go على هاتف => نفس IP ديال dev host
+  if (Platform.OS === "web") {
+    return "http://localhost:8000";
+  }
+
   const host = getDevHost();
-  if (host) return `http://${host}:8000`;
+  if (host) {
+    return `http://${host}:8000`;
+  }
 
-  // fallback
-  return "http://127.0.0.1:8000";
+  throw new Error("API base URL is not configured");
 }
 
 const API_BASE_URL = getApiBaseUrl();
@@ -56,7 +56,6 @@ export async function detectFish(photoUri: string): Promise<DetectResult> {
   const res = await fetch(url, {
     method: "POST",
     body: form,
-    // ⚠️ مهم فـ RN: ما تحطّش Content-Type هنا، fetch كيزيد boundary بوحدو
   });
 
   if (!res.ok) {

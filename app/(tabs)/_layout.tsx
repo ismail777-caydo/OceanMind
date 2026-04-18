@@ -9,6 +9,7 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#38bdf8",
         tabBarInactiveTintColor: "rgba(255,255,255,0.55)",
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: "rgba(15, 35, 60, 0.94)",
           borderTopColor: "rgba(255,255,255,0.14)",
@@ -17,16 +18,22 @@ export default function TabLayout() {
           paddingTop: 8,
           paddingBottom: 14,
         },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "700",
+        },
       }}
     >
-      {/* ✅ فقط جوج Tabs */}
       <Tabs.Screen
         name="home"
         options={{
           title: "Accueil",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} />
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
@@ -36,12 +43,15 @@ export default function TabLayout() {
         options={{
           title: "Profil",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "person" : "person-outline"} size={size} color={color} />
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
 
-      {/* ❌ كلشي الآخر مخبي */}
       <Tabs.Screen name="detection" options={{ href: null }} />
       <Tabs.Screen name="zones" options={{ href: null }} />
       <Tabs.Screen name="meteo" options={{ href: null }} />
@@ -50,12 +60,12 @@ export default function TabLayout() {
       <Tabs.Screen name="logbook" options={{ href: null }} />
       <Tabs.Screen name="community" options={{ href: null }} />
       <Tabs.Screen name="store" options={{ href: null }} />
-      <Tabs.Screen name="reglementation" options={{ href: null }} />
       <Tabs.Screen name="add-capture" options={{ href: null }} />
-     <Tabs.Screen name="journal" options={{ href: null }} />
-     <Tabs.Screen name="add-product" options={{ href: null }} />
-     <Tabs.Screen name="edit-product" options={{ href: null }} />
-     <Tabs.Screen name="product-details" options={{ href: null }} />
+      <Tabs.Screen name="journal" options={{ href: null }} />
+      <Tabs.Screen name="add-product" options={{ href: null }} />
+      <Tabs.Screen name="edit-product" options={{ href: null }} />
+      <Tabs.Screen name="product-details" options={{ href: null }} />
+      <Tabs.Screen name="edit" options={{ href: null }} />
     </Tabs>
   );
 }

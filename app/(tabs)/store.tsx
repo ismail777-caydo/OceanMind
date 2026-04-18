@@ -11,11 +11,13 @@ import {
   TextInput,
   ScrollView,
   ImageBackground,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../src/lib/supabaseClient";
+import { useAuth } from "../../src/auth/AuthContext";
 
 type Product = {
   id: string;
@@ -43,14 +45,15 @@ const CATEGORIES = [
 
 export default function Store() {
   const router = useRouter();
+  const { user, logged, ready } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [myProducts, setMyProducts] = useState<Product[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "mine" | "favorites">("all");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tous");
+  const [loading, setLoading] = useState(true);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
@@ -58,107 +61,173 @@ export default function Store() {
   };
 
   const fetchAll = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      setLoading(true);
 
-    setCurrentUserId(user?.id ?? null);
-
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (!error) setProducts(data || []);
-
-    if (user?.id) {
-      const { data: mine } = await supabase
+      const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      setMyProducts(mine || []);
+      if (error) {
+        console.log("fetch products error:", error);
+        Alert.alert("Erreur", error.message);
+        return;
+      }
 
-      const { data: favs } = await supabase
-        .from("favorite_products")
-        .select("product_id")
-        .eq("user_id", user.id);
+      setProducts(data || []);
 
-      setFavoriteIds((favs || []).map((x: any) => x.product_id));
-    } else {
-      setMyProducts([]);
-      setFavoriteIds([]);
+      if (user?.id) {
+        const { data: mine, error: mineError } = await supabase
+          .from("products")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (mineError) {
+          console.log("fetch my products error:", mineError);
+        }
+
+        setMyProducts(mine || []);
+
+        const { data: favs, error: favsError } = await supabase
+          .from("favorite_products")
+          .select("product_id")
+          .eq("user_id", user.id);
+
+        if (favsError) {
+          console.log("fetch favorites error:", favsError);
+        }
+
+        setFavoriteIds((favs || []).map((x: any) => x.product_id));
+      } else {
+        setMyProducts([]);
+        setFavoriteIds([]);
+      }
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
+    } finally {
+      setLoading(false);
     }
   };
 
   useFocusEffect(
     useCallback(() => {
+      if (!ready) return;
       fetchAll();
-    }, [])
+    }, [ready, user?.id])
   );
 
-  const openWhatsApp = (phone: string) => {
-    const cleaned = phone.replace(/\D/g, "");
-    Linking.openURL(`https://wa.me/${cleaned}`);
+  const openWhatsApp = async (phone: string) => {
+    try {
+      const cleaned = phone.replace(/\D/g, "");
+
+      if (!cleaned) {
+        Alert.alert("Erreur", "Numéro WhatsApp invalide.");
+        return;
+      }
+
+      const url = `https://wa.me/${cleaned}`;
+      const supported = await Linking.canOpenURL(url);
+
+      if (!supported) {
+        Alert.alert("Erreur", "Impossible d'ouvrir WhatsApp.");
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message || "Impossible d'ouvrir WhatsApp.");
+    }
   };
 
-  const confirmDelete = (id: string) => {
+  const confirmDelete = (id: string, ownerId: string) => {
+    if (!user || user.id !== ownerId) {
+      Alert.alert("Accès refusé", "Tu ne peux supprimer que ton propre produit.");
+      return;
+    }
+
     Alert.alert("Supprimer", "Tu veux supprimer ce produit ?", [
       { text: "Annuler", style: "cancel" },
       {
         text: "Supprimer",
         style: "destructive",
-        onPress: () => handleDelete(id),
+        onPress: () => handleDelete(id, ownerId),
       },
     ]);
   };
 
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("products").delete().eq("id", id);
-
-    if (error) {
-      Alert.alert("Erreur", error.message);
+  const handleDelete = async (id: string, ownerId: string) => {
+    if (!user || user.id !== ownerId) {
+      Alert.alert("Accès refusé", "Tu ne peux supprimer que ton propre produit.");
       return;
     }
 
-    Alert.alert("Succès", "Produit supprimé.");
-    fetchAll();
+    try {
+      const { error: imagesDeleteError } = await supabase
+        .from("product_images")
+        .delete()
+        .eq("product_id", id);
+
+      if (imagesDeleteError) {
+        console.log("delete product_images error:", imagesDeleteError);
+      }
+
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        Alert.alert("Erreur", error.message);
+        return;
+      }
+
+      Alert.alert("Succès", "Produit supprimé.");
+      fetchAll();
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
+    }
   };
 
   const toggleFavorite = async (productId: string) => {
-    if (!currentUserId) {
-      Alert.alert("Erreur", "Utilisateur non connecté.");
+    if (!logged || !user) {
+      Alert.alert("Erreur", "Tu dois te connecter pour gérer les favoris.");
       return;
     }
 
     const isFav = favoriteIds.includes(productId);
 
-    if (isFav) {
-      const { error } = await supabase
-        .from("favorite_products")
-        .delete()
-        .eq("user_id", currentUserId)
-        .eq("product_id", productId);
+    try {
+      if (isFav) {
+        const { error } = await supabase
+          .from("favorite_products")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("product_id", productId);
 
-      if (error) {
-        Alert.alert("Erreur", error.message);
-        return;
+        if (error) {
+          Alert.alert("Erreur", error.message);
+          return;
+        }
+
+        setFavoriteIds((prev) => prev.filter((id) => id !== productId));
+      } else {
+        const { error } = await supabase.from("favorite_products").insert({
+          user_id: user.id,
+          product_id: productId,
+        });
+
+        if (error) {
+          Alert.alert("Erreur", error.message);
+          return;
+        }
+
+        setFavoriteIds((prev) => [...prev, productId]);
       }
-
-      setFavoriteIds((prev) => prev.filter((id) => id !== productId));
-    } else {
-      const { error } = await supabase.from("favorite_products").insert({
-        user_id: currentUserId,
-        product_id: productId,
-      });
-
-      if (error) {
-        Alert.alert("Erreur", error.message);
-        return;
-      }
-
-      setFavoriteIds((prev) => [...prev, productId]);
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
     }
   };
 
@@ -181,6 +250,7 @@ export default function Store() {
         (item.category || "").toLowerCase() === selectedCategory.toLowerCase();
 
       const q = search.trim().toLowerCase();
+
       const matchesSearch =
         q.length === 0 ||
         (item.title || "").toLowerCase().includes(q) ||
@@ -194,7 +264,7 @@ export default function Store() {
   }, [baseData, search, selectedCategory]);
 
   const renderItem = ({ item }: { item: Product }) => {
-    const isMine = currentUserId === item.user_id;
+    const isMine = !!user && user.id === item.user_id;
     const isFav = favoriteIds.includes(item.id);
 
     return (
@@ -259,6 +329,12 @@ export default function Store() {
               </Text>
             </View>
           )}
+
+          {isMine && (
+            <View style={styles.mineBadge}>
+              <Text style={styles.mineBadgeText}>Mon produit</Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.seller}>👤 {item.seller_name}</Text>
@@ -285,7 +361,10 @@ export default function Store() {
               <Text style={styles.editText}>Modifier</Text>
             </Pressable>
 
-            <Pressable style={styles.deleteBtn} onPress={() => confirmDelete(item.id)}>
+            <Pressable
+              style={styles.deleteBtn}
+              onPress={() => confirmDelete(item.id, item.user_id)}
+            >
               <Text style={styles.deleteText}>Supprimer</Text>
             </Pressable>
           </View>
@@ -293,6 +372,14 @@ export default function Store() {
       </Pressable>
     );
   };
+
+  if (!ready) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#38bdf8" />
+      </View>
+    );
+  }
 
   return (
     <ImageBackground
@@ -345,14 +432,26 @@ export default function Store() {
 
               <Pressable
                 style={[styles.tabBtn, activeTab === "mine" && styles.tabBtnActive]}
-                onPress={() => setActiveTab("mine")}
+                onPress={() => {
+                  if (!logged) {
+                    Alert.alert("Erreur", "Tu dois te connecter.");
+                    return;
+                  }
+                  setActiveTab("mine");
+                }}
               >
                 <Text style={styles.tabText}>Mes produits</Text>
               </Pressable>
 
               <Pressable
                 style={[styles.tabBtn, activeTab === "favorites" && styles.tabBtnActive]}
-                onPress={() => setActiveTab("favorites")}
+                onPress={() => {
+                  if (!logged) {
+                    Alert.alert("Erreur", "Tu dois te connecter.");
+                    return;
+                  }
+                  setActiveTab("favorites");
+                }}
               >
                 <Text style={styles.tabText}>Favoris</Text>
               </Pressable>
@@ -387,20 +486,29 @@ export default function Store() {
                 </Pressable>
               ))}
             </ScrollView>
+
+            {loading && (
+              <View style={styles.inlineLoader}>
+                <ActivityIndicator size="small" color="#38bdf8" />
+                <Text style={styles.inlineLoaderText}>Chargement des produits...</Text>
+              </View>
+            )}
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <MaterialCommunityIcons
-              name="basket-outline"
-              size={34}
-              color="rgba(255,255,255,0.72)"
-            />
-            <Text style={styles.emptyTitle}>Aucun produit trouvé</Text>
-            <Text style={styles.emptySub}>
-              Essaie une autre recherche ou ajoute un nouveau produit.
-            </Text>
-          </View>
+          !loading ? (
+            <View style={styles.emptyBox}>
+              <MaterialCommunityIcons
+                name="basket-outline"
+                size={34}
+                color="rgba(255,255,255,0.72)"
+              />
+              <Text style={styles.emptyTitle}>Aucun produit trouvé</Text>
+              <Text style={styles.emptySub}>
+                Essaie une autre recherche ou ajoute un nouveau produit.
+              </Text>
+            </View>
+          ) : null
         }
         contentContainerStyle={styles.listContent}
       />
@@ -410,6 +518,12 @@ export default function Store() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0b1220",
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(10, 25, 45, 0.35)",
@@ -430,7 +544,13 @@ const styles = StyleSheet.create({
   backText: { color: "#fff", fontWeight: "800", fontSize: 12 },
   container: { paddingHorizontal: 18, paddingTop: 12 },
   logo: { width: 150, height: 150, alignSelf: "center" },
-  title: { color: "#fff", fontSize: 18, fontWeight: "900", textAlign: "center", marginTop: 10 },
+  title: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "center",
+    marginTop: 10,
+  },
   subtitle: {
     color: "rgba(255,255,255,0.78)",
     textAlign: "center",
@@ -449,7 +569,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  addBtnText: { color: "#fff", textAlign: "center", fontWeight: "900", fontSize: 15 },
+  addBtnText: {
+    color: "#fff",
+    textAlign: "center",
+    fontWeight: "900",
+    fontSize: 15,
+  },
   tabsRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   tabBtn: {
     flex: 1,
@@ -472,7 +597,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  searchInput: { flex: 1, paddingVertical: 12, color: "#0f172a", fontWeight: "700" },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    color: "#0f172a",
+    fontWeight: "700",
+  },
   categoriesRow: { paddingBottom: 14, gap: 8 },
   categoryChip: {
     backgroundColor: "rgba(255,255,255,0.10)",
@@ -485,6 +615,17 @@ const styles = StyleSheet.create({
   },
   categoryChipActive: { backgroundColor: "rgba(245, 158, 11, 0.92)" },
   categoryChipText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  inlineLoader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  inlineLoaderText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
   listContent: { paddingBottom: 30, paddingHorizontal: 18 },
   card: {
     marginTop: 4,
@@ -556,6 +697,17 @@ const styles = StyleSheet.create({
   conditionNew: { backgroundColor: "rgba(34,197,94,0.22)" },
   conditionUsed: { backgroundColor: "rgba(245,158,11,0.22)" },
   metaBadgeText: { color: "#fff", fontWeight: "800", fontSize: 12 },
+  mineBadge: {
+    backgroundColor: "rgba(56, 189, 248, 0.95)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  mineBadgeText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
   seller: {
     fontSize: 13,
     color: "rgba(255,255,255,0.82)",

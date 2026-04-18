@@ -16,7 +16,13 @@ import { getTidesAndWaves, TidesWavesResponse } from "../../src/services/tides";
 import CityPicker from "../../src/components/CityPicker";
 import { useSavedCity } from "../../src/hooks/useSavedCity";
 
-function StatBox({ icon, label, value }: any) {
+type StatBoxProps = {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  value: string;
+};
+
+function StatBox({ icon, label, value }: StatBoxProps) {
   return (
     <View style={styles.statBox}>
       <MaterialCommunityIcons name={icon} size={18} color="#60a5fa" />
@@ -29,7 +35,10 @@ function StatBox({ icon, label, value }: any) {
 function formatHour(ts?: string) {
   if (!ts) return "—";
   const d = new Date(ts);
-  return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function dayName(dateStr: string) {
@@ -40,11 +49,9 @@ function dayName(dateStr: string) {
 export default function Tides() {
   const router = useRouter();
 
-  const {
-    selectedCity,
-    setSelectedCity,
-    ready,
-  } = useSavedCity("oceanmind_selected_city");
+  const { selectedCity, setSelectedCity, ready } = useSavedCity(
+    "oceanmind_selected_city"
+  );
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -55,23 +62,26 @@ export default function Tides() {
     else router.replace("/(tabs)/home");
   };
 
+  const fetchTides = async () => {
+    try {
+      setLoading(true);
+      setErr(null);
+
+      const res = await getTidesAndWaves(selectedCity.lat, selectedCity.lon);
+      setData(res);
+    } catch (e) {
+      console.log("tides fetch error:", e);
+      setErr(
+        "Les marées et vagues sont momentanément indisponibles. Veuillez réessayer plus tard."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!ready) return;
-
-    (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
-
-        const res = await getTidesAndWaves(selectedCity.lat, selectedCity.lon);
-        console.log("TIDES JSON =>", res);
-        setData(res);
-      } catch (e) {
-        setErr("Marées & vagues غير متاحة دابا. تأكد السيرفر خدام و IP صحيح.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetchTides();
   }, [selectedCity, ready]);
 
   const current = data?.current ?? {};
@@ -81,7 +91,10 @@ export default function Tides() {
 
   const chartLevels = useMemo(() => {
     const levels = tidesToday?.chart_levels ?? [];
-    if (!levels.length) return [0.25, 0.4, 0.55, 0.75, 0.9, 1.0, 0.85, 0.65, 0.45, 0.3, 0.2];
+
+    if (!levels.length) {
+      return [0.25, 0.4, 0.55, 0.75, 0.9, 1.0, 0.85, 0.65, 0.45, 0.3, 0.2];
+    }
 
     const min = Math.min(...levels);
     const max = Math.max(...levels);
@@ -117,10 +130,17 @@ export default function Tides() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={{ alignItems: "center" }}>
-          <Image source={require("../../src/assets/logo.png")} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.title}>Marées & Vagues</Text>
+          <Image
+            source={require("../../src/assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>Marées & vagues</Text>
         </View>
 
         <CityPicker
@@ -131,19 +151,22 @@ export default function Tides() {
         />
 
         {loading ? (
-          <View style={{ marginTop: 18, alignItems: "center" }}>
+          <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color="#2dd4bf" />
-            <Text style={{ marginTop: 10, color: "rgba(255,255,255,0.8)", fontWeight: "800" }}>
-              Chargement marées & vagues…
-            </Text>
+            <Text style={styles.loaderText}>Chargement des marées et vagues...</Text>
           </View>
         ) : err ? (
           <View style={styles.alertCard}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <View style={styles.alertHeader}>
               <Ionicons name="warning-outline" size={18} color="#f59e0b" />
               <Text style={styles.alertTitle}>Erreur</Text>
             </View>
+
             <Text style={styles.alertText}>{err}</Text>
+
+            <Pressable style={styles.retryBtn} onPress={fetchTides}>
+              <Text style={styles.retryBtnText}>Réessayer</Text>
+            </Pressable>
           </View>
         ) : (
           <>
@@ -156,23 +179,42 @@ export default function Tides() {
               <View style={styles.twoBoxes}>
                 <View style={styles.smallCard}>
                   <View style={styles.smallHead}>
-                    <MaterialCommunityIcons name="arrow-up-bold" size={16} color="#60a5fa" />
+                    <MaterialCommunityIcons
+                      name="arrow-up-bold"
+                      size={16}
+                      color="#60a5fa"
+                    />
                     <Text style={styles.smallHeadText}>Marée haute</Text>
                   </View>
+
                   <Text style={styles.bigTime}>{formatHour(highTide?.time)}</Text>
                   <Text style={styles.smallSub}>
-                    {highTide?.height_m != null ? `${highTide.height_m.toFixed(2)} m` : "—"}
+                    {highTide?.height_m != null
+                      ? `${highTide.height_m.toFixed(2)} m`
+                      : "—"}
                   </Text>
                 </View>
 
-                <View style={[styles.smallCard, { backgroundColor: "rgba(34,197,94,0.14)" }]}>
+                <View
+                  style={[
+                    styles.smallCard,
+                    { backgroundColor: "rgba(34,197,94,0.14)" },
+                  ]}
+                >
                   <View style={styles.smallHead}>
-                    <MaterialCommunityIcons name="arrow-down-bold" size={16} color="#34d399" />
+                    <MaterialCommunityIcons
+                      name="arrow-down-bold"
+                      size={16}
+                      color="#34d399"
+                    />
                     <Text style={styles.smallHeadText}>Marée basse</Text>
                   </View>
+
                   <Text style={styles.bigTime}>{formatHour(lowTide?.time)}</Text>
                   <Text style={styles.smallSub}>
-                    {lowTide?.height_m != null ? `${lowTide.height_m.toFixed(2)} m` : "—"}
+                    {lowTide?.height_m != null
+                      ? `${lowTide.height_m.toFixed(2)} m`
+                      : "—"}
                   </Text>
                 </View>
               </View>
@@ -210,11 +252,13 @@ export default function Tides() {
                   label="Hauteur"
                   value={currentWave != null ? `${currentWave} m` : "—"}
                 />
+
                 <StatBox
                   icon="compass-outline"
                   label="Direction"
                   value={currentDirection}
                 />
+
                 <StatBox
                   icon="clock-outline"
                   label="Période"
@@ -230,19 +274,25 @@ export default function Tides() {
 
             <View style={[styles.card, styles.cardBlue]}>
               <View style={styles.cardTitleRow}>
-                <MaterialCommunityIcons name="robot-outline" size={18} color="#fff" />
-                <Text style={styles.cardTitle}>Recommandation IA</Text>
+                <MaterialCommunityIcons
+                  name="robot-outline"
+                  size={18}
+                  color="#fff"
+                />
+                <Text style={styles.cardTitle}>Recommandation</Text>
               </View>
 
-              <Text style={styles.iaText}>Moment idéal pour poser les filets</Text>
+              <Text style={styles.iaText}>Moment conseillé pour les activités marines</Text>
 
               <View style={styles.pillsRow}>
                 <View style={styles.pill}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={styles.pillHeader}>
                     <Ionicons name="time-outline" size={16} color="#2dd4bf" />
                     <Text style={styles.pillLabel}>Créneau conseillé</Text>
                   </View>
-                  <Text style={styles.pillValue}>{ai?.recommended_window ?? "—"}</Text>
+                  <Text style={styles.pillValue}>
+                    {ai?.recommended_window ?? "—"}
+                  </Text>
                 </View>
 
                 <View style={styles.pill}>
@@ -256,8 +306,12 @@ export default function Tides() {
 
             <View style={styles.card}>
               <View style={styles.cardTitleRow}>
-                <MaterialCommunityIcons name="calendar-week" size={18} color="#93c5fd" />
-                <Text style={styles.cardTitle}>Prévisions 7 jours</Text>
+                <MaterialCommunityIcons
+                  name="calendar-week"
+                  size={18}
+                  color="#93c5fd"
+                />
+                <Text style={styles.cardTitle}>Prévisions sur 7 jours</Text>
               </View>
 
               <View style={{ gap: 10 }}>
@@ -267,7 +321,8 @@ export default function Tides() {
                     <Text style={styles.dayDate}>{d.date}</Text>
                     <View style={{ flex: 1 }} />
                     <Text style={styles.dayValue}>
-                      {d.wave_height_max_m != null ? `${d.wave_height_max_m} m` : "—"} / {d.wave_direction_text ?? "—"}
+                      {d.wave_height_max_m != null ? `${d.wave_height_max_m} m` : "—"} /{" "}
+                      {d.wave_direction_text ?? "—"}
                     </Text>
                   </View>
                 ))}
@@ -275,10 +330,11 @@ export default function Tides() {
             </View>
 
             <View style={styles.alertCard}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <View style={styles.alertHeader}>
                 <Ionicons name="warning-outline" size={18} color="#f59e0b" />
                 <Text style={styles.alertTitle}>Attention</Text>
               </View>
+
               <Text style={styles.alertText}>
                 {data?.warning ?? "Prévisions marines disponibles."}
               </Text>
@@ -294,8 +350,10 @@ export default function Tides() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10, 25, 45, 0.35)" },
-
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10, 25, 45, 0.35)",
+  },
   topBar: { paddingTop: 52, paddingHorizontal: 16 },
   backBtn: {
     flexDirection: "row",
@@ -310,11 +368,18 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
   },
   backText: { color: "#fff", fontWeight: "800", fontSize: 12 },
-
   container: { paddingHorizontal: 18, paddingTop: 10 },
   logo: { width: 150, height: 150, marginBottom: 6 },
   title: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 8 },
-
+  loaderWrap: {
+    marginTop: 18,
+    alignItems: "center",
+  },
+  loaderText: {
+    marginTop: 10,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "800",
+  },
   card: {
     marginTop: 14,
     borderRadius: 20,
@@ -327,10 +392,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(29, 78, 216, 0.25)",
     borderColor: "rgba(147, 197, 253, 0.25)",
   },
-
-  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
   cardTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
-
   twoBoxes: { flexDirection: "row", gap: 10 },
   smallCard: {
     flex: 1,
@@ -341,10 +409,18 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.10)",
   },
   smallHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  smallHeadText: { color: "rgba(255,255,255,0.8)", fontWeight: "800", fontSize: 12 },
+  smallHeadText: {
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "800",
+    fontSize: 12,
+  },
   bigTime: { marginTop: 10, color: "#fff", fontWeight: "900", fontSize: 22 },
-  smallSub: { marginTop: 6, color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 11 },
-
+  smallSub: {
+    marginTop: 6,
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
   chartBox: {
     marginTop: 12,
     borderRadius: 16,
@@ -353,9 +429,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  chartTitle: { color: "rgba(255,255,255,0.8)", fontWeight: "900", marginBottom: 10 },
-
-  chartBars: { flexDirection: "row", alignItems: "flex-end", gap: 6, height: 80 },
+  chartTitle: {
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  chartBars: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 6,
+    height: 80,
+  },
   barWrap: { flex: 1, justifyContent: "flex-end" },
   bar: {
     borderRadius: 8,
@@ -363,10 +447,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-
-  chartTimes: { marginTop: 10, flexDirection: "row", justifyContent: "space-between" },
-  timeTxt: { color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 11 },
-
+  chartTimes: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  timeTxt: {
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
     flex: 1,
@@ -378,9 +468,18 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.10)",
     alignItems: "center",
   },
-  statLabel: { marginTop: 6, color: "rgba(255,255,255,0.7)", fontWeight: "800", fontSize: 11 },
-  statValue: { marginTop: 6, color: "#fff", fontWeight: "900", fontSize: 12 },
-
+  statLabel: {
+    marginTop: 6,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
+  statValue: {
+    marginTop: 6,
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
   stateBox: {
     marginTop: 12,
     borderRadius: 16,
@@ -389,11 +488,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  stateLabel: { color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 11 },
-  stateValue: { marginTop: 6, color: "#fff", fontWeight: "900", fontSize: 12 },
-
-  iaText: { color: "rgba(255,255,255,0.85)", fontWeight: "900", marginBottom: 10 },
-
+  stateLabel: {
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
+  stateValue: {
+    marginTop: 6,
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
+  iaText: {
+    color: "rgba(255,255,255,0.85)",
+    fontWeight: "900",
+    marginBottom: 10,
+  },
   pillsRow: { flexDirection: "row", gap: 10 },
   pill: {
     flex: 1,
@@ -403,9 +513,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  pillLabel: { color: "rgba(255,255,255,0.7)", fontWeight: "800", fontSize: 11 },
-  pillValue: { marginTop: 8, color: "#fff", fontWeight: "900", fontSize: 12 },
-
+  pillHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  pillLabel: {
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
+  pillValue: {
+    marginTop: 8,
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
   safeChip: {
     marginTop: 10,
     alignSelf: "flex-start",
@@ -415,7 +538,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(34,197,94,0.75)",
   },
   safeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
   dayRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -426,10 +548,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  dayName: { color: "#fff", fontWeight: "900", width: 44, textTransform: "capitalize" },
-  dayDate: { color: "rgba(255,255,255,0.72)", fontWeight: "800", fontSize: 11 },
-  dayValue: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
+  dayName: {
+    color: "#fff",
+    fontWeight: "900",
+    width: 44,
+    textTransform: "capitalize",
+  },
+  dayDate: {
+    color: "rgba(255,255,255,0.72)",
+    fontWeight: "800",
+    fontSize: 11,
+  },
+  dayValue: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
   alertCard: {
     marginTop: 14,
     borderRadius: 18,
@@ -438,6 +572,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(245, 158, 11, 0.22)",
   },
+  alertHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
   alertTitle: { color: "#fff", fontWeight: "900" },
-  alertText: { color: "rgba(255,255,255,0.78)", fontWeight: "700", lineHeight: 16 },
+  alertText: {
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  retryBtn: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(56,189,248,0.95)",
+  },
+  retryBtnText: {
+    color: "#fff",
+    fontWeight: "900",
+  },
 });

@@ -1,4 +1,5 @@
 // src/services/weather.ts
+
 const AI_BASE = process.env.EXPO_PUBLIC_AI_BASE_URL;
 
 if (!AI_BASE) {
@@ -7,18 +8,24 @@ if (!AI_BASE) {
 
 export type MarineWeatherResponse = {
   location: { lat: number; lon: number };
+
   current?: {
     temp?: number;
     weather_code?: number;
     desc?: string;
     icon?: string;
   };
+
   marine?: {
     wind_kmh?: number;
-    dir?: number;
+
+    // ✅ بدلناها من number → string
+    dir?: string;
+
     waves_m?: number;
     water_c?: number;
   };
+
   daily_7?: Array<{
     date: string;
     min: number;
@@ -30,8 +37,17 @@ export type MarineWeatherResponse = {
 };
 
 export async function getMarineWeather(lat: number, lon: number) {
+  if (!AI_BASE) {
+    throw new Error("AI_BASE is not configured");
+  }
+
   const url = `${AI_BASE}/weather/marine?lat=${lat}&lon=${lon}`;
+
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Weather error: ${res.status}`);
+
+  if (!res.ok) {
+    throw new Error(`Weather error: ${res.status}`);
+  }
+
   return (await res.json()) as MarineWeatherResponse;
 }

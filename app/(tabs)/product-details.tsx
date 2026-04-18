@@ -9,10 +9,12 @@ import {
   Image,
   ImageBackground,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../src/lib/supabaseClient";
+import { useAuth } from "../../src/auth/AuthContext";
 
 type Product = {
   id: string;
@@ -38,13 +40,15 @@ type ProductImage = {
 export default function ProductDetails() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { user, ready } = useAuth();
+
   const productId = String(params.id || "");
 
   const [product, setProduct] = useState<Product | null>(null);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [activeImage, setActiveImage] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
@@ -52,18 +56,20 @@ export default function ProductDetails() {
   };
 
   useEffect(() => {
-    if (productId) fetchProductDetails();
-  }, [productId]);
+    if (!ready) return;
+
+    if (!productId) {
+      Alert.alert("Erreur", "Produit introuvable.");
+      router.replace("/(tabs)/store");
+      return;
+    }
+
+    fetchProductDetails();
+  }, [productId, ready]);
 
   const fetchProductDetails = async () => {
     try {
       setLoading(true);
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      setCurrentUserId(user?.id ?? null);
 
       const { data: productData, error: productError } = await supabase
         .from("products")
@@ -71,8 +77,9 @@ export default function ProductDetails() {
         .eq("id", productId)
         .single();
 
-      if (productError) {
-        Alert.alert("Erreur", productError.message);
+      if (productError || !productData) {
+        Alert.alert("Erreur", productError?.message || "Produit introuvable.");
+        setProduct(null);
         return;
       }
 
@@ -103,13 +110,36 @@ export default function ProductDetails() {
     }
   };
 
-  const openWhatsApp = (phone: string) => {
-    const cleaned = phone.replace(/\D/g, "");
-    Linking.openURL(`https://wa.me/${cleaned}`);
+  const openWhatsApp = async (phone: string) => {
+    try {
+      const cleaned = phone.replace(/\D/g, "");
+
+      if (!cleaned) {
+        Alert.alert("Erreur", "Numéro WhatsApp invalide.");
+        return;
+      }
+
+      const url = `https://wa.me/${cleaned}`;
+      const supported = await Linking.canOpenURL(url);
+
+      if (!supported) {
+        Alert.alert("Erreur", "Impossible d'ouvrir WhatsApp.");
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message || "Impossible d'ouvrir WhatsApp.");
+    }
   };
 
   const confirmDelete = () => {
     if (!product) return;
+
+    if (!user || product.user_id !== user.id) {
+      Alert.alert("Accès refusé", "Tu ne peux supprimer que ton propre produit.");
+      return;
+    }
 
     Alert.alert("Supprimer", "Tu veux supprimer ce produit ?", [
       { text: "Annuler", style: "cancel" },
@@ -124,24 +154,54 @@ export default function ProductDetails() {
   const handleDelete = async () => {
     if (!product) return;
 
-    const { error } = await supabase.from("products").delete().eq("id", product.id);
-
-    if (error) {
-      Alert.alert("Erreur", error.message);
+    if (!user || product.user_id !== user.id) {
+      Alert.alert("Accès refusé", "Tu ne peux supprimer que ton propre produit.");
       return;
     }
 
-    Alert.alert("Succès", "Produit supprimé.");
-    router.replace("/(tabs)/store");
+    try {
+      setDeleting(true);
+
+      const { error: imagesDeleteError } = await supabase
+        .from("product_images")
+        .delete()
+        .eq("product_id", product.id);
+
+      if (imagesDeleteError) {
+        console.log("product_images delete error:", imagesDeleteError);
+      }
+
+      const { error } = await supabase.from("products").delete().eq("id", product.id);
+
+      if (error) {
+        Alert.alert("Erreur", error.message);
+        return;
+      }
+
+      Alert.alert("Succès", "Produit supprimé.");
+      router.replace("/(tabs)/store");
+    } catch (e: any) {
+      Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const isMine = currentUserId && product?.user_id === currentUserId;
+  const isMine = !!user && !!product && product.user_id === user.id;
 
   const galleryImages = useMemo(() => {
     if (images.length > 0) return images.map((img) => img.image_url);
     if (product?.image_url) return [product.image_url];
     return [];
   }, [images, product]);
+
+  if (!ready) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#38bdf8" />
+      </View>
+    );
+  }
 
   return (
     <ImageBackground
@@ -197,14 +257,12 @@ export default function ProductDetails() {
               >
                 {galleryImages.map((uri, index) => {
                   const isActive = activeImage === uri;
+
                   return (
                     <Pressable
                       key={`${uri}-${index}`}
                       onPress={() => setActiveImage(uri)}
-                      style={[
-                        styles.thumbWrap,
-                        isActive && styles.thumbWrapActive,
-                      ]}
+                      style={[styles.thumbWrap, isActive && styles.thumbWrapActive]}
                     >
                       <Image source={{ uri }} style={styles.thumbImage} />
                     </Pressable>
@@ -279,8 +337,14 @@ export default function ProductDetails() {
                   <Text style={styles.editText}>Modifier</Text>
                 </Pressable>
 
-                <Pressable style={styles.deleteBtn} onPress={confirmDelete}>
-                  <Text style={styles.deleteText}>Supprimer</Text>
+                <Pressable
+                  style={[styles.deleteBtn, deleting && { opacity: 0.7 }]}
+                  onPress={confirmDelete}
+                  disabled={deleting}
+                >
+                  <Text style={styles.deleteText}>
+                    {deleting ? "Suppression..." : "Supprimer"}
+                  </Text>
                 </Pressable>
               </View>
             )}
@@ -295,16 +359,20 @@ export default function ProductDetails() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0b1220",
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(10, 25, 45, 0.35)",
   },
-
   topBar: {
     paddingTop: 52,
     paddingHorizontal: 16,
   },
-
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -317,24 +385,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
   },
-
   backText: {
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
   },
-
   container: {
     paddingHorizontal: 18,
     paddingTop: 12,
   },
-
   logo: {
     width: 150,
     height: 150,
     alignSelf: "center",
   },
-
   title: {
     color: "#fff",
     fontSize: 18,
@@ -343,7 +407,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 14,
   },
-
   card: {
     borderRadius: 22,
     padding: 14,
@@ -351,21 +414,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-
   loadingText: {
     color: "#fff",
     textAlign: "center",
     fontWeight: "800",
     paddingVertical: 20,
   },
-
   mainImage: {
     width: "100%",
     height: 240,
     borderRadius: 16,
     marginBottom: 12,
   },
-
   noImage: {
     width: "100%",
     height: 240,
@@ -376,17 +436,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-
   noImageText: {
     color: "#475569",
     fontWeight: "800",
   },
-
   thumbRow: {
     paddingBottom: 10,
     gap: 10,
   },
-
   thumbWrap: {
     width: 74,
     height: 74,
@@ -396,16 +453,13 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
     marginRight: 10,
   },
-
   thumbWrapActive: {
     borderColor: "#38bdf8",
   },
-
   thumbImage: {
     width: "100%",
     height: "100%",
   },
-
   titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -413,68 +467,57 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
-
   productTitle: {
     flex: 1,
     color: "#fff",
     fontSize: 20,
     fontWeight: "900",
   },
-
   price: {
     color: "#4ade80",
     fontSize: 18,
     fontWeight: "900",
   },
-
   description: {
     color: "rgba(255,255,255,0.82)",
     lineHeight: 20,
     fontWeight: "700",
     marginBottom: 12,
   },
-
   metaWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
     marginBottom: 12,
   },
-
   metaBadge: {
     backgroundColor: "rgba(255,255,255,0.16)",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
-
   metaBadgeAlt: {
     backgroundColor: "rgba(34,197,94,0.18)",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
-
   conditionBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
   },
-
   conditionNew: {
     backgroundColor: "rgba(34,197,94,0.22)",
   },
-
   conditionUsed: {
     backgroundColor: "rgba(245,158,11,0.22)",
   },
-
   metaBadgeText: {
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
   },
-
   infoBox: {
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 16,
@@ -482,12 +525,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 6,
   },
-
   infoText: {
     color: "#fff",
     fontWeight: "700",
   },
-
   whatsappBtn: {
     backgroundColor: "#25D366",
     padding: 13,
@@ -498,35 +539,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-
   whatsappText: {
     color: "#fff",
     textAlign: "center",
     fontWeight: "900",
   },
-
   ownerActions: {
     gap: 8,
   },
-
   editBtn: {
     backgroundColor: "#f59e0b",
     padding: 12,
     borderRadius: 16,
   },
-
   editText: {
     color: "#fff",
     textAlign: "center",
     fontWeight: "900",
   },
-
   deleteBtn: {
     backgroundColor: "#ef4444",
     padding: 12,
     borderRadius: 16,
   },
-
   deleteText: {
     color: "#fff",
     textAlign: "center",
