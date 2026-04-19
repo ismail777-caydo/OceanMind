@@ -10,6 +10,7 @@ export type DetectResult = {
   legal?: boolean | null;
   rule?: string;
   confidence?: number;
+  error?: string;
 };
 
 function getDevHost() {
@@ -53,16 +54,34 @@ export async function detectFish(photoUri: string): Promise<DetectResult> {
     type: "image/jpeg",
   } as any);
 
-  const res = await fetch(url, {
-    method: "POST",
-    body: form,
-  });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      body: form,
+    });
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`AI error ${res.status}: ${txt}`);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      return {
+        species: "UNAVAILABLE",
+        common_name: "Service indisponible",
+        confidence: 0,
+        legal: null,
+        rule: "Le service AI n'est pas disponible pour le moment.",
+        error: `HTTP ${res.status}: ${txt}`,
+      };
+    }
+
+    const data = (await res.json()) as DetectResult;
+    return data;
+  } catch (error: any) {
+    return {
+      species: "UNAVAILABLE",
+      common_name: "Service indisponible",
+      confidence: 0,
+      legal: null,
+      rule: "Impossible de contacter le serveur AI. Réessayez plus tard.",
+      error: error?.message ?? "Unknown network error",
+    };
   }
-
-  const data = (await res.json()) as DetectResult;
-  return data;
 }

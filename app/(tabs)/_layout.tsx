@@ -66,6 +66,8 @@ export default function TabLayout() {
       <Tabs.Screen name="edit-product" options={{ href: null }} />
       <Tabs.Screen name="product-details" options={{ href: null }} />
       <Tabs.Screen name="edit" options={{ href: null }} />
+      <Tabs.Screen name="paywall" options={{ href: null, }} />
     </Tabs>
+    
   );
 }

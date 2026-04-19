@@ -409,7 +409,7 @@ export default function Store() {
               resizeMode="contain"
             />
 
-            <Text style={styles.title}>Ocean Mind Store</Text>
+            <Text style={styles.title}>STORE </Text>
             <Text style={styles.subtitle}>
               Équipements de pêche, matériel utile et annonces de la communauté.
             </Text>

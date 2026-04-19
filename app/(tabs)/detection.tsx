@@ -13,19 +13,19 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { detectFish, DetectResult } from "../../src/services/ai";
+import PremiumGate from "../../src/components/PremiumGate";
 
 type Step = "select" | "loading" | "result";
 
 export default function Detection() {
   const router = useRouter();
-
   const [step, setStep] = useState<Step>("select");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [result, setResult] = useState<DetectResult | null>(null);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
-    else router.replace("/(tabs)/home");
+    else router.replace("/home" as any);
   };
 
   const pickImage = async (fromCamera: boolean) => {
@@ -34,7 +34,6 @@ export default function Detection() {
 
       if (fromCamera) {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
-
         if (!perm.granted) {
           Alert.alert("Permission", "L'accès à la caméra est requis.");
           return;
@@ -46,7 +45,6 @@ export default function Detection() {
         });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
         if (!perm.granted) {
           Alert.alert("Permission", "L'accès à la galerie est requis.");
           return;
@@ -61,7 +59,6 @@ export default function Detection() {
 
       if (!pickRes.canceled) {
         const uri = pickRes.assets[0].uri;
-
         setPhotoUri(uri);
         setStep("loading");
 
@@ -125,156 +122,159 @@ export default function Detection() {
       `&aiConfidence=${encodeURIComponent(String(confidence))}` +
       `&photoUri=${encodeURIComponent(photoUri ?? "")}`;
 
-    router.push(`/(tabs)/add-capture?${q}`);
+    router.push(`/(tabs)/add-capture?${q}` as any);
   };
 
   return (
-    <ImageBackground
-      source={require("../../src/assets/background.png")}
-      style={styles.bg}
-      resizeMode="cover"
-    >
-      <View style={styles.overlay} />
+    <PremiumGate featureName="Fish Detection">
+      <ImageBackground
+        source={require("../../src/assets/background.png")}
+        style={styles.bg}
+        resizeMode="cover"
+      >
+        <View style={styles.overlay} />
 
-      <View style={styles.topBar}>
-        <Pressable onPress={handleBack} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={18} color="#fff" />
-          <Text style={styles.backText}>Retour</Text>
-        </Pressable>
-      </View>
-
-      {step === "select" && (
-        <View style={styles.center}>
-          <Image
-            source={require("../../src/assets/logo.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-
-          <Text style={styles.title}>Détection des poissons IA</Text>
-          <Text style={styles.desc}>
-            Analysez une photo du poisson pour estimer l'espèce, la taille et la
-            conformité.
-          </Text>
-
-          <View style={styles.card}>
-            <Pressable style={styles.btnBlue} onPress={() => pickImage(true)}>
-              <Ionicons name="camera-outline" size={18} color="#fff" />
-              <Text style={styles.btnText}>Prendre une photo</Text>
-            </Pressable>
-
-            <Pressable style={styles.btnGreen} onPress={() => pickImage(false)}>
-              <Ionicons name="images-outline" size={18} color="#fff" />
-              <Text style={styles.btnText}>Importer une photo</Text>
-            </Pressable>
-          </View>
+        <View style={styles.topBar}>
+          <Pressable onPress={handleBack} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={18} color="#fff" />
+            <Text style={styles.backText}>Retour</Text>
+          </Pressable>
         </View>
-      )}
 
-      {step === "loading" && (
-        <View style={styles.center}>
-          <Image
-            source={require("../../src/assets/logo.png")}
-            style={styles.logoSmall}
-            resizeMode="contain"
-          />
+        {step === "select" && (
+          <View style={styles.center}>
+            <Image
+              source={require("../../src/assets/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
 
-          <Text style={styles.title}>Analyse en cours...</Text>
+            <Text style={styles.title}>Détection des poissons IA</Text>
 
-          <ActivityIndicator
-            size="large"
-            color="#2dd4bf"
-            style={{ marginVertical: 20 }}
-          />
+            <Text style={styles.desc}>
+              Analysez une photo du poisson pour estimer l'espèce, la taille et la
+              conformité.
+            </Text>
 
-          <Text style={styles.tip}>
-            Veuillez patienter pendant que l'analyse est en cours.
-          </Text>
-        </View>
-      )}
+            <View style={styles.card}>
+              <Pressable style={styles.btnBlue} onPress={() => pickImage(true)}>
+                <Ionicons name="camera-outline" size={18} color="#fff" />
+                <Text style={styles.btnText}>Prendre une photo</Text>
+              </Pressable>
 
-      {step === "result" && (
-        <View style={styles.resultWrap}>
-          <Text style={styles.resultHeader}>Résultat de l'analyse</Text>
-
-          <Image
-            source={
-              photoUri ? { uri: photoUri } : require("../../src/assets/logo.png")
-            }
-            style={styles.resultImage}
-            resizeMode="cover"
-          />
-
-          <Text style={styles.fishName}>
-            {result?.common_name ?? result?.species ?? "—"}
-          </Text>
-
-          <View style={styles.row}>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>Taille estimée</Text>
-              <Text style={styles.infoValue}>
-                {result?.sizeCm != null ? `${result.sizeCm} cm` : "—"}
-              </Text>
-            </View>
-
-            <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>Poids estimé</Text>
-              <Text style={styles.infoValue}>
-                {result?.weightG != null ? `${result.weightG} g` : "—"}
-              </Text>
+              <Pressable style={styles.btnGreen} onPress={() => pickImage(false)}>
+                <Ionicons name="images-outline" size={18} color="#fff" />
+                <Text style={styles.btnText}>Importer une photo</Text>
+              </Pressable>
             </View>
           </View>
+        )}
 
-          {(() => {
-            const legal = result?.legal;
-            let label = "À vérifier";
-            let bgColor = "rgba(217,164,0,0.85)";
+        {step === "loading" && (
+          <View style={styles.center}>
+            <Image
+              source={require("../../src/assets/logo.png")}
+              style={styles.logoSmall}
+              resizeMode="contain"
+            />
 
-            if (legal === true) {
-              label = "LÉGAL";
-              bgColor = "rgba(34,197,94,0.85)";
-            } else if (legal === false) {
-              label = "ILLÉGAL";
-              bgColor = "rgba(239,68,68,0.85)";
-            }
+            <Text style={styles.title}>Analyse en cours...</Text>
 
-            return (
-              <View style={[styles.legalBox, { backgroundColor: bgColor }]}>
-                <Ionicons
-                  name={
-                    legal === true
-                      ? "checkmark-circle"
-                      : legal === false
-                      ? "close-circle"
-                      : "alert-circle"
-                  }
-                  size={20}
-                  color="#fff"
-                />
-                <Text style={styles.legalText}>{label}</Text>
+            <ActivityIndicator
+              size="large"
+              color="#2dd4bf"
+              style={{ marginVertical: 20 }}
+            />
+
+            <Text style={styles.tip}>
+              Veuillez patienter pendant que l'analyse est en cours.
+            </Text>
+          </View>
+        )}
+
+        {step === "result" && (
+          <View style={styles.resultWrap}>
+            <Text style={styles.resultHeader}>Résultat de l'analyse</Text>
+
+            <Image
+              source={
+                photoUri ? { uri: photoUri } : require("../../src/assets/logo.png")
+              }
+              style={styles.resultImage}
+              resizeMode="cover"
+            />
+
+            <Text style={styles.fishName}>
+              {result?.common_name ?? result?.species ?? "—"}
+            </Text>
+
+            <View style={styles.row}>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Taille estimée</Text>
+                <Text style={styles.infoValue}>
+                  {result?.sizeCm != null ? `${result.sizeCm} cm` : "—"}
+                </Text>
               </View>
-            );
-          })()}
 
-          <Text style={styles.ruleText}>{result?.rule ?? ""}</Text>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Poids estimé</Text>
+                <Text style={styles.infoValue}>
+                  {result?.weightG != null ? `${result.weightG} g` : "—"}
+                </Text>
+              </View>
+            </View>
 
-          <Pressable style={styles.btnGreen} onPress={handleAddToLogbook}>
-            <Text style={styles.btnText}>Ajouter au journal</Text>
-          </Pressable>
+            {(() => {
+              const legal = result?.legal;
+              let label = "À vérifier";
+              let bgColor = "rgba(217,164,0,0.85)";
 
-          <Pressable
-            style={styles.btnGray}
-            onPress={() => {
-              setPhotoUri(null);
-              setResult(null);
-              setStep("select");
-            }}
-          >
-            <Text style={styles.btnText}>Nouvelle analyse</Text>
-          </Pressable>
-        </View>
-      )}
-    </ImageBackground>
+              if (legal === true) {
+                label = "LÉGAL";
+                bgColor = "rgba(34,197,94,0.85)";
+              } else if (legal === false) {
+                label = "ILLÉGAL";
+                bgColor = "rgba(239,68,68,0.85)";
+              }
+
+              return (
+                <View style={[styles.legalBox, { backgroundColor: bgColor }]}>
+                  <Ionicons
+                    name={
+                      legal === true
+                        ? "checkmark-circle"
+                        : legal === false
+                        ? "close-circle"
+                        : "alert-circle"
+                    }
+                    size={20}
+                    color="#fff"
+                  />
+                  <Text style={styles.legalText}>{label}</Text>
+                </View>
+              );
+            })()}
+
+            <Text style={styles.ruleText}>{result?.rule ?? ""}</Text>
+
+            <Pressable style={styles.btnGreen} onPress={handleAddToLogbook}>
+              <Text style={styles.btnText}>Ajouter au journal</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.btnGray}
+              onPress={() => {
+                setPhotoUri(null);
+                setResult(null);
+                setStep("select");
+              }}
+            >
+              <Text style={styles.btnText}>Nouvelle analyse</Text>
+            </Pressable>
+          </View>
+        )}
+      </ImageBackground>
+    </PremiumGate>
   );
 }
 

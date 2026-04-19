@@ -15,7 +15,7 @@ import {
   Text,
   View,
 } from "react-native";
-
+import PremiumGate from "../../src/components/PremiumGate";
 type Zone = {
   id: string;
   type: "recommended" | "forbidden";
@@ -40,11 +40,9 @@ function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number) 
   const dLon = ((bLon - aLon) * Math.PI) / 180;
   const lat1 = (aLat * Math.PI) / 180;
   const lat2 = (bLat * Math.PI) / 180;
-
   const x =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-
   const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   return R * c;
 }
@@ -90,7 +88,6 @@ function laracheZones(userLat: number, userLon: number): Zone[] {
 
   return base.map((z) => {
     const distM = distanceMeters(userLat, userLon, z.lat, z.lon);
-
     return {
       ...z,
       radius: z.type === "recommended" ? 1200 : 900,
@@ -101,7 +98,6 @@ function laracheZones(userLat: number, userLon: number): Zone[] {
 
 export default function Zones() {
   const router = useRouter();
-
   const [loading, setLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
@@ -109,7 +105,6 @@ export default function Zones() {
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [mapSize, setMapSize] = useState({ w: 0, h: 0 });
-
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -139,10 +134,8 @@ export default function Zones() {
 
   const loadLocation = async () => {
     setLoading(true);
-
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-
       if (status !== "granted") {
         setPlace("Permission GPS refusée");
         setZones(laracheZones(LARACHE_CENTER.lat, LARACHE_CENTER.lon));
@@ -154,14 +147,11 @@ export default function Zones() {
         Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 8000)
-        ),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
       ])) as any;
 
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
-
       setCoords({ lat, lon });
       setPlace("Position détectée");
       setZones(laracheZones(lat, lon));
@@ -179,244 +169,246 @@ export default function Zones() {
   }, []);
 
   return (
-    <ImageBackground
-      source={require("../../src/assets/background.png")}
-      style={styles.bg}
-      resizeMode="cover"
-    >
-      <View style={styles.overlay} />
-
-      <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={18} color="#fff" />
-          <Text style={styles.backText}>Retour</Text>
-        </Pressable>
-
-        <Pressable onPress={() => setShowGrid((v) => !v)} style={styles.gridBtn}>
-          <Ionicons name="grid-outline" size={16} color="#fff" />
-          <Text style={styles.gridBtnText}>{showGrid ? "Grille ON" : "Grille OFF"}</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+    <PremiumGate featureName="Smart Maps">
+      <ImageBackground
+        source={require("../../src/assets/background.png")}
+        style={styles.bg}
+        resizeMode="cover"
       >
-        <Image
-          source={require("../../src/assets/logo.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <View style={styles.overlay} />
 
-        <Text style={styles.title}>Carte des zones de pêche</Text>
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={18} color="#fff" />
+            <Text style={styles.backText}>Retour</Text>
+          </Pressable>
 
-        <View style={styles.locationPill}>
-          <View style={styles.locationLeft}>
-            <Ionicons name="location-outline" size={16} color="#2dd4bf" />
-            <Text style={styles.locationText}>{place}</Text>
-          </View>
-          <Ionicons
-            name="funnel-outline"
-            size={16}
-            color="rgba(255,255,255,0.8)"
-          />
+          <Pressable onPress={() => setShowGrid((v) => !v)} style={styles.gridBtn}>
+            <Ionicons name="grid-outline" size={16} color="#fff" />
+            <Text style={styles.gridBtnText}>{showGrid ? "Grille ON" : "Grille OFF"}</Text>
+          </Pressable>
         </View>
 
-        <View style={styles.mapBox}>
-          <ImageBackground
-            source={require("../../src/assets/larache_map.png")}
-            style={styles.mapBg}
-            resizeMode="cover"
-            onLoadEnd={() => setMapReady(true)}
-            onLayout={(e) => {
-              const { width, height } = e.nativeEvent.layout;
-              setMapSize({ w: width, h: height });
-            }}
-          >
-            <View style={styles.mapOverlay} />
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <Image
+            source={require("../../src/assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
 
-            {showGrid && (
-              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-                {Array.from({ length: 9 }).map((_, i) => {
-                  const p = ((i + 1) / 10) * 100;
-                  return (
-                    <React.Fragment key={i}>
-                      <View style={[styles.gridLineH, { top: `${p}%` }]} />
-                      <View style={[styles.gridLineV, { left: `${p}%` }]} />
-                    </React.Fragment>
-                  );
-                })}
-              </View>
-            )}
+          <Text style={styles.title}>Carte des zones de pêche</Text>
 
-            {loading || !mapReady || mapSize.w === 0 ? (
-              <View style={styles.loadingCenter}>
-                <ActivityIndicator size="large" color="#2dd4bf" />
-                <Text style={styles.loadingText}>Chargement...</Text>
-              </View>
-            ) : (
-              <>
-                {zones.map((z) => {
-                  const isRec = z.type === "recommended";
-                  const borderColor = isRec
-                    ? "rgba(34,197,94,0.80)"
-                    : "rgba(239,68,68,0.78)";
-                  const fill = isRec
-                    ? "rgba(34,197,94,0.14)"
-                    : "rgba(239,68,68,0.12)";
+          <View style={styles.locationPill}>
+            <View style={styles.locationLeft}>
+              <Ionicons name="location-outline" size={16} color="#2dd4bf" />
+              <Text style={styles.locationText}>{place}</Text>
+            </View>
 
-                  const leftPx = z.ui.xPct * mapSize.w;
-                  const topPx = z.ui.yPct * mapSize.h;
+            <Ionicons
+              name="funnel-outline"
+              size={16}
+              color="rgba(255,255,255,0.8)"
+            />
+          </View>
 
-                  return (
-                    <View
-                      key={z.id}
-                      pointerEvents="none"
-                      style={{
-                        position: "absolute",
-                        left: leftPx,
-                        top: topPx,
-                        transform: [
-                          { translateX: -z.ui.size / 2 },
-                          { translateY: -z.ui.size / 2 },
-                        ],
-                      }}
-                    >
-                      <Animated.View
+          <View style={styles.mapBox}>
+            <ImageBackground
+              source={require("../../src/assets/larache_map.png")}
+              style={styles.mapBg}
+              resizeMode="cover"
+              onLoadEnd={() => setMapReady(true)}
+              onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+                setMapSize({ w: width, h: height });
+              }}
+            >
+              <View style={styles.mapOverlay} />
+
+              {showGrid && (
+                <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                  {Array.from({ length: 9 }).map((_, i) => {
+                    const p = ((i + 1) / 10) * 100;
+                    return (
+                      <React.Fragment key={i}>
+                        <View style={[styles.gridLineH, { top: `${p}%` }]} />
+                        <View style={[styles.gridLineV, { left: `${p}%` }]} />
+                      </React.Fragment>
+                    );
+                  })}
+                </View>
+              )}
+
+              {loading || !mapReady || mapSize.w === 0 ? (
+                <View style={styles.loadingCenter}>
+                  <ActivityIndicator size="large" color="#2dd4bf" />
+                  <Text style={styles.loadingText}>Chargement...</Text>
+                </View>
+              ) : (
+                <>
+                  {zones.map((z) => {
+                    const isRec = z.type === "recommended";
+                    const borderColor = isRec
+                      ? "rgba(34,197,94,0.80)"
+                      : "rgba(239,68,68,0.78)";
+                    const fill = isRec
+                      ? "rgba(34,197,94,0.14)"
+                      : "rgba(239,68,68,0.12)";
+                    const leftPx = z.ui.xPct * mapSize.w;
+                    const topPx = z.ui.yPct * mapSize.h;
+
+                    return (
+                      <View
+                        key={z.id}
+                        pointerEvents="none"
                         style={{
                           position: "absolute",
-                          width: z.ui.size,
-                          height: z.ui.size,
-                          borderRadius: 999,
-                          borderWidth: 2,
-                          borderColor,
-                          opacity: pulse.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.55, 0],
-                          }),
+                          left: leftPx,
+                          top: topPx,
                           transform: [
-                            {
-                              scale: pulse.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [1, 1.35],
-                              }),
-                            },
+                            { translateX: -z.ui.size / 2 },
+                            { translateY: -z.ui.size / 2 },
                           ],
                         }}
-                      />
+                      >
+                        <Animated.View
+                          style={{
+                            position: "absolute",
+                            width: z.ui.size,
+                            height: z.ui.size,
+                            borderRadius: 999,
+                            borderWidth: 2,
+                            borderColor,
+                            opacity: pulse.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.55, 0],
+                            }),
+                            transform: [
+                              {
+                                scale: pulse.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [1, 1.35],
+                                }),
+                              },
+                            ],
+                          }}
+                        />
 
-                      <View
-                        style={{
-                          width: z.ui.size,
-                          height: z.ui.size,
-                          borderRadius: 999,
-                          borderWidth: z.ui.border,
-                          borderColor,
-                          backgroundColor: fill,
-                        }}
-                      />
-                    </View>
-                  );
-                })}
-              </>
-            )}
-          </ImageBackground>
-        </View>
-
-        <View style={styles.infoCardBelow}>
-          <View style={styles.infoTitleRow}>
-            <View style={styles.dot} />
-            <Text style={styles.infoTitle}>
-              {recommendedZone ? recommendedZone.title : "Zone recommandée"}
-            </Text>
+                        <View
+                          style={{
+                            width: z.ui.size,
+                            height: z.ui.size,
+                            borderRadius: 999,
+                            borderWidth: z.ui.border,
+                            borderColor,
+                            backgroundColor: fill,
+                          }}
+                        />
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+            </ImageBackground>
           </View>
 
-          <View style={styles.infoRow}>
-            <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.infoText}>Larache (démo)</Text>
+          <View style={styles.infoCardBelow}>
+            <View style={styles.infoTitleRow}>
+              <View style={styles.dot} />
+              <Text style={styles.infoTitle}>
+                {recommendedZone ? recommendedZone.title : "Zone recommandée"}
+              </Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.infoText}>Larache (démo)</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="time" size={14} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.infoText}>
+                Meilleur moment : {recommendedZone ? recommendedZone.bestTime : "—"}
+              </Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons
+                name="fish-outline"
+                size={14}
+                color="rgba(255,255,255,0.8)"
+              />
+              <Text style={styles.infoText}>
+                {recommendedZone ? recommendedZone.species : "—"}
+              </Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons
+                name="water-outline"
+                size={14}
+                color="rgba(255,255,255,0.8)"
+              />
+              <Text style={styles.infoText}>
+                {recommendedZone ? recommendedZone.depth : "—"}
+              </Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons
+                name="navigate"
+                size={14}
+                color="rgba(255,255,255,0.8)"
+              />
+              <Text style={styles.infoText}>
+                Distance : {recommendedZone ? recommendedZone.distanceKm : "—"} km
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.infoRow}>
-            <Ionicons name="time" size={14} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.infoText}>
-              Meilleur moment : {recommendedZone ? recommendedZone.bestTime : "—"}
-            </Text>
+          <View style={styles.bottomRow}>
+            <Pressable
+              style={styles.filterBtn}
+              onPress={() =>
+                Alert.alert("Filtres", "Fonctionnalité bientôt disponible.")
+              }
+            >
+              <Ionicons name="funnel-outline" size={16} color="#fff" />
+              <Text style={styles.bottomBtnText}>Filtres</Text>
+            </Pressable>
+
+            <Pressable style={styles.locBtn} onPress={loadLocation}>
+              <Ionicons name="locate-outline" size={16} color="#fff" />
+              <Text style={styles.bottomBtnText}>Localiser ma position</Text>
+            </Pressable>
           </View>
 
-          <View style={styles.infoRow}>
-            <Ionicons
-              name="fish-outline"
-              size={14}
-              color="rgba(255,255,255,0.8)"
-            />
-            <Text style={styles.infoText}>
-              {recommendedZone ? recommendedZone.species : "—"}
-            </Text>
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View
+                style={[
+                  styles.legendDot,
+                  { backgroundColor: "rgba(34,197,94,0.9)" },
+                ]}
+              />
+              <Text style={styles.legendText}>Zone recommandée</Text>
+            </View>
+
+            <View style={styles.legendItem}>
+              <View
+                style={[
+                  styles.legendDot,
+                  { backgroundColor: "rgba(239,68,68,0.9)" },
+                ]}
+              />
+              <Text style={styles.legendText}>Zone interdite</Text>
+            </View>
           </View>
-
-          <View style={styles.infoRow}>
-            <Ionicons
-              name="water-outline"
-              size={14}
-              color="rgba(255,255,255,0.8)"
-            />
-            <Text style={styles.infoText}>
-              {recommendedZone ? recommendedZone.depth : "—"}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Ionicons
-              name="navigate"
-              size={14}
-              color="rgba(255,255,255,0.8)"
-            />
-            <Text style={styles.infoText}>
-              Distance : {recommendedZone ? recommendedZone.distanceKm : "—"} km
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.bottomRow}>
-          <Pressable
-            style={styles.filterBtn}
-            onPress={() =>
-              Alert.alert("Filtres", "Fonctionnalité bientôt disponible.")
-            }
-          >
-            <Ionicons name="funnel-outline" size={16} color="#fff" />
-            <Text style={styles.bottomBtnText}>Filtres</Text>
-          </Pressable>
-
-          <Pressable style={styles.locBtn} onPress={loadLocation}>
-            <Ionicons name="locate-outline" size={16} color="#fff" />
-            <Text style={styles.bottomBtnText}>Localiser ma position</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View
-              style={[
-                styles.legendDot,
-                { backgroundColor: "rgba(34,197,94,0.9)" },
-              ]}
-            />
-            <Text style={styles.legendText}>Zone recommandée</Text>
-          </View>
-
-          <View style={styles.legendItem}>
-            <View
-              style={[
-                styles.legendDot,
-                { backgroundColor: "rgba(239,68,68,0.9)" },
-              ]}
-            />
-            <Text style={styles.legendText}>Zone interdite</Text>
-          </View>
-        </View>
-      </ScrollView>
-    </ImageBackground>
+        </ScrollView>
+      </ImageBackground>
+    </PremiumGate>
   );
 }
 

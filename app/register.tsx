@@ -91,7 +91,7 @@ export default function Register() {
         password,
       });
 
-      router.replace("/(tabs)/home");
+      router.replace("/home" as any);
     } catch (e: any) {
       setErrors((prev) => ({
         ...prev,
@@ -282,7 +282,7 @@ export default function Register() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.replace("/")}
+              onPress={() => router.replace("/home" as any)}
               style={styles.linkWrap}
               disabled={loading}
             >
