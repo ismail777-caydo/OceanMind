@@ -324,13 +324,13 @@ export default function Zones() {
 
             <View style={styles.infoRow}>
               <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.infoText}>Larache (démo)</Text>
+              <Text style={styles.infoText}>Zone : Données en préparation</Text>
             </View>
 
             <View style={styles.infoRow}>
               <Ionicons name="time" size={14} color="rgba(255,255,255,0.8)" />
               <Text style={styles.infoText}>
-                Meilleur moment : {recommendedZone ? recommendedZone.bestTime : "—"}
+               Horaires recommandés : Disponibles prochainement
               </Text>
             </View>
 
@@ -341,7 +341,7 @@ export default function Zones() {
                 color="rgba(255,255,255,0.8)"
               />
               <Text style={styles.infoText}>
-                {recommendedZone ? recommendedZone.species : "—"}
+                Espèces concernées : En cours d’intégration
               </Text>
             </View>
 
@@ -352,7 +352,7 @@ export default function Zones() {
                 color="rgba(255,255,255,0.8)"
               />
               <Text style={styles.infoText}>
-                {recommendedZone ? recommendedZone.depth : "—"}
+                Profondeur moyenne : Données bientôt disponibles
               </Text>
             </View>
 
@@ -363,7 +363,7 @@ export default function Zones() {
                 color="rgba(255,255,255,0.8)"
               />
               <Text style={styles.infoText}>
-                Distance : {recommendedZone ? recommendedZone.distanceKm : "—"} km
+                Distance : Sera affichée après localisation
               </Text>
             </View>
           </View>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,11 @@ import {
   ScrollView,
   ImageBackground,
   Image,
-  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import PhoneInput from "react-native-phone-number-input";
 import { supabase } from "../../src/lib/supabaseClient";
-import { useAuth } from "../../src/auth/AuthContext";
 
 const PRODUCT_CATEGORIES = [
   "Filets",
@@ -28,9 +27,10 @@ const PRODUCT_CATEGORIES = [
 export default function EditProduct() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { user, logged, ready } = useAuth();
-
   const productId = String(params.id || "");
+
+  const phoneRef = useRef<PhoneInput>(null);
+  const whatsappRef = useRef<PhoneInput>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -38,12 +38,17 @@ export default function EditProduct() {
   const [condition, setCondition] = useState<"new" | "used">("used");
   const [category, setCategory] = useState("Filets");
   const [city, setCity] = useState("");
-  const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
   const [sellerName, setSellerName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+
+  const [phoneRaw, setPhoneRaw] = useState("");
+  const [phoneFormatted, setPhoneFormatted] = useState("");
+
+  const [hasWhatsApp, setHasWhatsApp] = useState(true);
+  const [whatsappRaw, setWhatsappRaw] = useState("");
+  const [whatsappFormatted, setWhatsappFormatted] = useState("");
+
   const [loading, setLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
@@ -51,118 +56,123 @@ export default function EditProduct() {
   };
 
   useEffect(() => {
-    if (!ready) return;
+    if (productId) fetchProduct();
+  }, [productId]);
 
-    if (!logged || !user) {
-      Alert.alert("Accès refusé", "Tu dois te connecter.");
-      router.replace("/");
-      return;
+  const toLocalMoroccanNumber = (value: string | null | undefined) => {
+    const clean = String(value || "").replace(/\D/g, "");
+    if (!clean) return "";
+
+    if (clean.startsWith("212")) {
+      const rest = clean.slice(3);
+      return rest.startsWith("0") ? rest : `0${rest}`;
     }
 
-    if (!productId) {
-      Alert.alert("Erreur", "Produit introuvable.");
-      router.replace("/(tabs)/store");
-      return;
-    }
-
-    fetchProduct();
-  }, [ready, logged, user, productId]);
+    return clean.startsWith("0") ? clean : `0${clean}`;
+  };
 
   const fetchProduct = async () => {
-    if (!user?.id) {
-      setPageLoading(false);
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", productId)
+      .single();
+
+    if (error) {
+      console.log("fetch product error:", error);
+      Alert.alert("Erreur", error.message);
       return;
     }
 
-    try {
-      setPageLoading(true);
-
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("id", productId)
-        .single();
-
-      if (error || !data) {
-        console.log("fetch product error:", error);
-        Alert.alert("Erreur", error?.message || "Produit introuvable.");
-        router.replace("/(tabs)/store");
-        return;
-      }
-
-      if (data.user_id !== user.id) {
-        Alert.alert("Accès refusé", "Tu ne peux modifier que ton propre produit.");
-        router.replace("/(tabs)/store");
-        return;
-      }
-
+    if (data) {
       setTitle(data.title || "");
       setDescription(data.description || "");
       setPrice(String(data.price ?? ""));
       setCondition((data.condition as "new" | "used") || "used");
       setCategory(data.category || "Filets");
       setCity(data.city || "");
-      setPhone(data.phone || "");
-      setWhatsapp(data.whatsapp || "");
       setSellerName(data.seller_name || "");
       setImageUrl(data.image_url || "");
-    } catch (e: any) {
-      console.log("fetch product global error:", e);
-      Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
-      router.replace("/(tabs)/store");
-    } finally {
-      setPageLoading(false);
+
+      const localPhone = toLocalMoroccanNumber(data.phone);
+      setPhoneRaw(localPhone);
+      setPhoneFormatted(data.phone || "");
+
+      if (data.has_whatsapp && data.whatsapp) {
+        setHasWhatsApp(true);
+        const localWhatsapp = toLocalMoroccanNumber(data.whatsapp);
+        setWhatsappRaw(localWhatsapp);
+        setWhatsappFormatted(data.whatsapp || "");
+      } else {
+        setHasWhatsApp(false);
+        setWhatsappRaw("");
+        setWhatsappFormatted("");
+      }
     }
   };
 
-  const handleUpdate = async () => {
-    if (!ready || !logged || !user) {
-      Alert.alert("Erreur", "Utilisateur non connecté.");
-      router.replace("/");
-      return;
+  const validatePhones = () => {
+    const phoneValid =
+      phoneFormatted &&
+      phoneRef.current?.isValidNumber(phoneRaw);
+
+    if (!phoneValid) {
+      Alert.alert("Téléphone invalide", "Veuillez saisir un numéro de téléphone valide. ");
+      return false;
     }
 
+    if (hasWhatsApp) {
+      const whatsappValid =
+        whatsappFormatted &&
+        whatsappRef.current?.isValidNumber(whatsappRaw);
+
+      if (!whatsappValid) {
+        Alert.alert("WhatsApp invalide", "Veuillez saisir un numéro WhatsApp valide.");
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleUpdate = async () => {
     if (
-      !title.trim() ||
-      !description.trim() ||
-      !price.trim() ||
-      !category.trim() ||
-      !city.trim() ||
-      !phone.trim() ||
-      !whatsapp.trim() ||
-      !sellerName.trim()
+      !title ||
+      !description ||
+      !price ||
+      !category ||
+      !city ||
+      !sellerName ||
+      !phoneRaw
     ) {
       Alert.alert("Erreur", "Merci de remplir tous les champs obligatoires.");
       return;
     }
 
-    const numericPrice = Number(price);
-
-    if (Number.isNaN(numericPrice) || numericPrice <= 0) {
-      Alert.alert("Erreur", "Merci d'entrer un prix valide.");
-      return;
-    }
+    if (!validatePhones()) return;
 
     try {
       setLoading(true);
 
+      const finalPhone = phoneFormatted || null;
+      const finalWhatsapp = hasWhatsApp ? whatsappFormatted || null : null;
+
       const { error } = await supabase
         .from("products")
         .update({
-          title: title.trim(),
-          description: description.trim(),
-          price: numericPrice,
+          title,
+          description,
+          price: Number(price),
           condition,
-          category: category.trim(),
-          city: city.trim(),
-          phone: phone.trim(),
-          whatsapp: whatsapp.trim(),
-          has_whatsapp: true,
-          seller_name: sellerName.trim(),
-          image_url: imageUrl.trim() || null,
+          category,
+          city,
+          phone: finalPhone,
+          whatsapp: finalWhatsapp,
+          has_whatsapp: hasWhatsApp,
+          seller_name: sellerName,
+          image_url: imageUrl || null,
         })
-        .eq("id", productId)
-        .eq("user_id", user.id);
+        .eq("id", productId);
 
       if (error) {
         console.log("update error:", error);
@@ -171,10 +181,7 @@ export default function EditProduct() {
       }
 
       Alert.alert("Succès", "Produit modifié avec succès !");
-      router.replace({
-        pathname: "/(tabs)/product-details",
-        params: { id: productId },
-      });
+      router.replace("/(tabs)/store");
     } catch (e: any) {
       console.log("global error:", e);
       Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
@@ -182,14 +189,6 @@ export default function EditProduct() {
       setLoading(false);
     }
   };
-
-  if (!ready || pageLoading) {
-    return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color="#38bdf8" />
-      </View>
-    );
-  }
 
   return (
     <ImageBackground
@@ -260,14 +259,20 @@ export default function EditProduct() {
           <Text style={styles.label}>Condition</Text>
           <View style={styles.row}>
             <Pressable
-              style={[styles.choiceBtn, condition === "new" && styles.choiceActive]}
+              style={[
+                styles.choiceBtn,
+                condition === "new" && styles.choiceActive,
+              ]}
               onPress={() => setCondition("new")}
             >
               <Text style={styles.choiceText}>New</Text>
             </Pressable>
 
             <Pressable
-              style={[styles.choiceBtn, condition === "used" && styles.choiceActive]}
+              style={[
+                styles.choiceBtn,
+                condition === "used" && styles.choiceActive,
+              ]}
               onPress={() => setCondition("used")}
             >
               <Text style={styles.choiceText}>Used</Text>
@@ -304,28 +309,6 @@ export default function EditProduct() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Téléphone</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Téléphone"
-              placeholderTextColor="#94a3b8"
-              value={phone}
-              onChangeText={setPhone}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>WhatsApp</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="WhatsApp"
-              placeholderTextColor="#94a3b8"
-              value={whatsapp}
-              onChangeText={setWhatsapp}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
             <Text style={styles.label}>Nom du vendeur</Text>
             <TextInput
               style={styles.input}
@@ -335,6 +318,83 @@ export default function EditProduct() {
               onChangeText={setSellerName}
             />
           </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Téléphone</Text>
+            <View style={styles.phoneWrap}>
+              <PhoneInput
+                ref={phoneRef}
+                defaultCode="MA"
+                layout="first"
+                value={phoneRaw}
+                onChangeText={setPhoneRaw}
+                onChangeFormattedText={setPhoneFormatted}
+                withShadow={false}
+                autoFocus={false}
+                containerStyle={styles.phoneContainer}
+                textContainerStyle={styles.phoneTextContainer}
+                textInputStyle={styles.phoneTextInput}
+                codeTextStyle={styles.phoneCodeText}
+                flagButtonStyle={styles.flagButton}
+                textInputProps={{
+                  placeholder: "Chercher un numéro",
+                  keyboardType: "phone-pad",
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>WhatsApp disponible ?</Text>
+            <View style={styles.row}>
+              <Pressable
+                style={[
+                  styles.choiceBtn,
+                  hasWhatsApp && styles.choiceActive,
+                ]}
+                onPress={() => setHasWhatsApp(true)}
+              >
+                <Text style={styles.choiceText}>Oui</Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.choiceBtn,
+                  !hasWhatsApp && styles.choiceOff,
+                ]}
+                onPress={() => setHasWhatsApp(false)}
+              >
+                <Text style={styles.choiceText}>Non</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {hasWhatsApp && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Numéro WhatsApp</Text>
+              <View style={styles.phoneWrap}>
+                <PhoneInput
+                  ref={whatsappRef}
+                  defaultCode="MA"
+                  layout="first"
+                  value={whatsappRaw}
+                  onChangeText={setWhatsappRaw}
+                  onChangeFormattedText={setWhatsappFormatted}
+                  withShadow={false}
+                  autoFocus={false}
+                  containerStyle={styles.phoneContainer}
+                  textContainerStyle={styles.phoneTextContainer}
+                  textInputStyle={styles.phoneTextInput}
+                  codeTextStyle={styles.phoneCodeText}
+                  flagButtonStyle={styles.flagButton}
+                  textInputProps={{
+                    placeholder: "Chercher un numéro",
+                    keyboardType: "phone-pad",
+                  }}
+                />
+              </View>
+            </View>
+          )}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Image URL (optionnel)</Text>
@@ -371,20 +431,16 @@ export default function EditProduct() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  loadingScreen: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#0b1220",
-  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(10, 25, 45, 0.35)",
   },
+
   topBar: {
     paddingTop: 52,
     paddingHorizontal: 16,
   },
+
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -397,20 +453,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
   },
+
   backText: {
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
   },
+
   container: {
     paddingHorizontal: 18,
     paddingTop: 12,
   },
+
   logo: {
     width: 150,
     height: 150,
     alignSelf: "center",
   },
+
   title: {
     color: "#fff",
     fontSize: 18,
@@ -418,6 +478,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 10,
   },
+
   subtitle: {
     color: "rgba(255,255,255,0.78)",
     textAlign: "center",
@@ -426,6 +487,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 14,
   },
+
   card: {
     marginTop: 8,
     borderRadius: 22,
@@ -434,15 +496,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
+
   inputGroup: {
     marginBottom: 12,
   },
+
   label: {
     color: "#fff",
     fontWeight: "800",
     marginBottom: 8,
     fontSize: 13,
   },
+
   input: {
     backgroundColor: "rgba(255,255,255,0.94)",
     borderRadius: 14,
@@ -451,15 +516,18 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     fontWeight: "700",
   },
+
   textarea: {
     minHeight: 100,
     textAlignVertical: "top",
   },
+
   row: {
     flexDirection: "row",
     gap: 10,
     marginBottom: 14,
   },
+
   choiceBtn: {
     flex: 1,
     backgroundColor: "rgba(255,255,255,0.10)",
@@ -469,18 +537,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
+
   choiceActive: {
     backgroundColor: "rgba(34,197,94,0.88)",
   },
+
+  choiceOff: {
+    backgroundColor: "rgba(239,68,68,0.72)",
+  },
+
   choiceText: {
     color: "#fff",
     fontWeight: "900",
   },
+
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
+
   categoryOption: {
     backgroundColor: "rgba(255,255,255,0.10)",
     paddingHorizontal: 12,
@@ -489,14 +565,50 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
+
   categoryOptionActive: {
     backgroundColor: "rgba(56, 189, 248, 0.95)",
   },
+
   categoryOptionText: {
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
   },
+
+  phoneWrap: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+
+  phoneContainer: {
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderRadius: 14,
+  },
+
+  phoneTextContainer: {
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+  },
+
+  phoneTextInput: {
+    color: "#0f172a",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+
+  phoneCodeText: {
+    color: "#0f172a",
+    fontWeight: "800",
+  },
+
+  flagButton: {
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+  },
+
   saveBtn: {
     backgroundColor: "#f59e0b",
     padding: 14,
@@ -507,6 +619,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
+
   saveText: {
     color: "#fff",
     textAlign: "center",
