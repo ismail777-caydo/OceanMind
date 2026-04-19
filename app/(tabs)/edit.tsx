@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/auth/AuthContext";
 import { supabase } from "../../src/lib/supabaseClient";
+import * as ImagePicker from "expo-image-picker";
 
 type ProfileForm = {
   full_name: string;
@@ -90,6 +91,7 @@ export default function EditProfileScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     if (!ready) return;
@@ -134,7 +136,6 @@ export default function EditProfileScreen() {
 
   useEffect(() => {
     if (!ready) return;
-
     if (!logged || !user) {
       router.replace("/");
     }
@@ -142,6 +143,80 @@ export default function EditProfileScreen() {
 
   const setField = (key: keyof ProfileForm, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const pickAndUploadAvatar = async () => {
+    if (!user?.id) {
+      Alert.alert("Erreur", "Utilisateur non connecté.");
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission refusée",
+          "Autorise l'accès à la galerie pour choisir une photo."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"] as any,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      const imageUri = asset.uri;
+
+      setUploadingImage(true);
+
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      const extension =
+        asset.fileName?.split(".").pop()?.toLowerCase() ||
+        imageUri.split(".").pop()?.toLowerCase() ||
+        "jpg";
+
+      const filePath = `${user.id}/avatar-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, blob, {
+          contentType: asset.mimeType || `image/${extension}`,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.log("upload avatar error:", uploadError.message);
+        Alert.alert("Erreur", "Impossible de téléverser la photo.");
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData.publicUrl;
+
+      setForm((prev) => ({
+        ...prev,
+        avatar_url: publicUrl,
+      }));
+
+      Alert.alert("Succès", "Photo de profil mise à jour.");
+    } catch (e: any) {
+      console.log("pickAndUploadAvatar error:", e);
+      Alert.alert("Erreur", e?.message || "Une erreur est survenue.");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const initials = useMemo(() => getInitials(form.full_name), [form.full_name]);
@@ -153,20 +228,8 @@ export default function EditProfileScreen() {
     }
 
     const normalizedPhone = normalizePhone(form.phone);
-
     if (form.phone.trim() && normalizedPhone.length < 12) {
       Alert.alert("Téléphone invalide", "Entrez un numéro marocain valide.");
-      return false;
-    }
-
-    if (
-      form.avatar_url.trim() &&
-      !/^https?:\/\/.+/i.test(form.avatar_url.trim())
-    ) {
-      Alert.alert(
-        "Lien invalide",
-        "Le lien de la photo doit commencer par http:// ou https://."
-      );
       return false;
     }
 
@@ -265,7 +328,7 @@ export default function EditProfileScreen() {
               Mettez à jour vos informations personnelles
             </Text>
 
-            <View style={styles.avatar}>
+            <Pressable onPress={pickAndUploadAvatar} style={styles.avatar}>
               {form.avatar_url.trim() ? (
                 <Image
                   source={{ uri: form.avatar_url.trim() }}
@@ -274,7 +337,15 @@ export default function EditProfileScreen() {
               ) : (
                 <Text style={styles.avatarText}>{initials}</Text>
               )}
-            </View>
+
+              <View style={styles.cameraBadge}>
+                {uploadingImage ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="camera-outline" size={16} color="#fff" />
+                )}
+              </View>
+            </Pressable>
 
             <Text style={styles.previewName}>
               {form.full_name.trim() || "Utilisateur"}
@@ -315,15 +386,6 @@ export default function EditProfileScreen() {
               placeholder="Ex: Larache"
               autoCapitalize="words"
             />
-
-            <FormField
-              label="Lien photo de profil"
-              value={form.avatar_url}
-              onChangeText={(v) => setField("avatar_url", v)}
-              placeholder="https://..."
-              keyboardType="default"
-              autoCapitalize="none"
-            />
           </View>
 
           <Pressable
@@ -342,7 +404,9 @@ export default function EditProfileScreen() {
             ) : (
               <>
                 <Ionicons name="save-outline" size={18} color="#fff" />
-                <Text style={styles.saveText}>Enregistrer les modifications</Text>
+                <Text style={styles.saveText}>
+                  Enregistrer les modifications
+                </Text>
               </>
             )}
           </Pressable>
@@ -454,6 +518,19 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "900",
     fontSize: 30,
+  },
+  cameraBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(45,212,191,0.95)",
+    borderWidth: 2,
+    borderColor: "rgba(7, 20, 40, 0.85)",
   },
   previewName: {
     marginTop: 14,

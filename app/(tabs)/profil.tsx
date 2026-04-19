@@ -25,7 +25,7 @@ type ProfileType = {
   phone: string | null;
   city?: string | null;
   avatar_url?: string | null;
-  preferred_language?: "Français" | "Arabe" | "Darija" | null;
+  preferred_language?: "Français" | null;
   voice_mode?: boolean | null;
   meteo_notifications?: boolean | null;
 };
@@ -132,11 +132,9 @@ export default function Profil() {
   const [profile, setProfile] = useState<ProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const [lang, setLang] = useState<"Français" | "Arabe" | "Darija">("Français");
+  const [lang] = useState<"Français">("Français");
   const [voiceMode, setVoiceMode] = useState(true);
   const [meteoNotif, setMeteoNotif] = useState(true);
-
   const [productCount, setProductCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
 
@@ -152,33 +150,38 @@ export default function Profil() {
     try {
       setLoading(true);
 
-      const [{ data: profileData, error: profileError }, { count: productsCount }, { count: favCount }] =
-        await Promise.all([
-          supabase
-            .from("profiles")
-            .select(
-              "full_name, phone, city, avatar_url, preferred_language, voice_mode, meteo_notifications"
-            )
-            .eq("id", user.id)
-            .maybeSingle(),
-          supabase
-            .from("products")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id),
-          supabase
-            .from("favorite_products")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id),
-        ]);
+      const [
+        { data: profileData, error: profileError },
+        { count: productsCount },
+        { count: favCount },
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "full_name, phone, city, avatar_url, preferred_language, voice_mode, meteo_notifications"
+          )
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id),
+        supabase
+          .from("favorite_products")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id),
+      ]);
 
       if (profileError) {
         console.log("profiles fetch error:", profileError.message);
         setProfile(null);
       } else {
         setProfile(profileData || null);
-        setLang(profileData?.preferred_language || "Français");
         setVoiceMode(profileData?.voice_mode ?? true);
         setMeteoNotif(profileData?.meteo_notifications ?? true);
+
+        // Forcer la langue en français
+        await savePreference({ preferred_language: "Français" });
       }
 
       setProductCount(productsCount || 0);
@@ -209,19 +212,13 @@ export default function Profil() {
     const { error } = await supabase.from("profiles").upsert({
       id: user.id,
       ...updates,
+      updated_at: new Date().toISOString(),
     });
 
     if (error) {
       console.log("save preference error:", error.message);
       Alert.alert("Erreur", "Impossible d'enregistrer la préférence.");
     }
-  };
-
-  const cycleLang = async () => {
-    const next =
-      lang === "Français" ? "Arabe" : lang === "Arabe" ? "Darija" : "Français";
-    setLang(next);
-    await savePreference({ preferred_language: next });
   };
 
   const toggleVoice = async (value: boolean) => {
@@ -234,10 +231,10 @@ export default function Profil() {
     await savePreference({ meteo_notifications: value });
   };
 
-  const goHome = () => router.replace("/(tabs)/home");
+  const goHome = () => router.replace("/home");
 
   const handleLogout = async () => {
-    Alert.alert("Déconnexion", "Tu veux te déconnecter ?", [
+    Alert.alert("Déconnexion", "Voulez-vous vous déconnecter ?", [
       { text: "Annuler", style: "cancel" },
       {
         text: "Se déconnecter",
@@ -289,9 +286,9 @@ export default function Profil() {
       >
         <View style={styles.overlay} />
         <SafeAreaView style={styles.loaderWrap}>
-          <Text style={styles.loaderText}>Tu dois te connecter.</Text>
+          <Text style={styles.loaderText}>Vous devez vous connecter.</Text>
           <Pressable style={styles.loginBtn} onPress={() => router.replace("/")}>
-            <Text style={styles.loginBtnText}>Aller au login</Text>
+            <Text style={styles.loginBtnText}>Aller à la connexion</Text>
           </Pressable>
         </SafeAreaView>
       </ImageBackground>
@@ -315,7 +312,7 @@ export default function Profil() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/(tabs)/edit")}
+            onPress={() => router.push("/edit")}
             style={styles.editBtn}
           >
             <Ionicons name="create-outline" size={16} color="#fff" />
@@ -382,98 +379,31 @@ export default function Profil() {
             <InfoBox label="Adresse e-mail" value={displayEmail} />
           </View>
 
-          <View style={styles.card}>
-            <SectionTitle icon="options-outline" title="Préférences" />
-
-            <Pressable onPress={cycleLang} style={styles.prefRow}>
-              <View style={styles.fieldLeft}>
-                <Ionicons
-                  name="language-outline"
-                  size={18}
-                  color="rgba(255,255,255,0.85)"
-                />
-                <Text style={styles.fieldLabel}>Langue</Text>
-              </View>
-
-              <View style={styles.valueRow}>
-                <Text style={styles.fieldValue}>{lang}</Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={16}
-                  color="rgba(255,255,255,0.75)"
-                />
-              </View>
-            </Pressable>
-
-            <View style={styles.prefRow}>
-              <View style={styles.fieldLeft}>
-                <Ionicons
-                  name="mic-outline"
-                  size={18}
-                  color="rgba(255,255,255,0.85)"
-                />
-                <Text style={styles.fieldLabel}>Mode voix</Text>
-              </View>
-
-              <Switch
-                value={voiceMode}
-                onValueChange={toggleVoice}
-                trackColor={{
-                  false: "rgba(255,255,255,0.20)",
-                  true: "rgba(45,212,191,0.65)",
-                }}
-                thumbColor="#ffffff"
-              />
-            </View>
-
-            <View style={styles.prefRow}>
-              <View style={styles.fieldLeft}>
-                <Ionicons
-                  name="notifications-outline"
-                  size={18}
-                  color="rgba(255,255,255,0.85)"
-                />
-                <Text style={styles.fieldLabel}>Notifications météo</Text>
-              </View>
-
-              <Switch
-                value={meteoNotif}
-                onValueChange={toggleMeteo}
-                trackColor={{
-                  false: "rgba(255,255,255,0.20)",
-                  true: "rgba(45,212,191,0.65)",
-                }}
-                thumbColor="#ffffff"
-              />
-            </View>
-          </View>
+          
 
           <View style={styles.card}>
             <SectionTitle icon="briefcase-outline" title="Activité" />
-
             <RowNav
               icon="storefront-outline"
               label="Voir mes produits"
-              onPress={() => router.push("/(tabs)/store")}
+              onPress={() => router.push("/store")}
             />
-
             <RowNav
               icon="heart-outline"
               label="Voir mes favoris"
-              onPress={() => router.push("/(tabs)/store")}
+              onPress={() => router.push("/store")}
             />
           </View>
 
           <View style={styles.card}>
             <SectionTitle icon="shield-checkmark-outline" title="Sécurité" />
-
             <RowNav
               icon="lock-outline"
               label="Changer le mot de passe"
               onPress={() =>
                 Alert.alert(
-                  "Bientôt",
-                  "La fonctionnalité changer le mot de passe sera connectée au backend."
+                  "Bientôt disponible",
+                  "La fonctionnalité de changement du mot de passe sera bientôt connectée au backend."
                 )
               }
             />
@@ -481,14 +411,13 @@ export default function Profil() {
 
           <View style={styles.card}>
             <SectionTitle icon="help-circle-outline" title="Support" />
-
             <RowNav
               icon="lifebuoy"
-              label="Aide & Support"
+              label="Aide et support"
               onPress={() =>
                 Alert.alert(
                   "Support",
-                  "Ajoute ici navigation vers FAQ, WhatsApp support ou écran d'aide."
+                  "Ajoutez ici la navigation vers la FAQ, WhatsApp support ou un écran d'aide."
                 )
               }
             />
