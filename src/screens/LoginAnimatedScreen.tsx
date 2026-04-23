@@ -29,7 +29,6 @@ export default function LoginAnimatedScreen() {
   const [opened, setOpened] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<LoginErrors>({});
@@ -61,7 +60,6 @@ export default function LoginAnimatedScreen() {
 
   const trigger = () => {
     if (opened) return;
-
     setOpened(true);
 
     Animated.parallel([
@@ -105,7 +103,6 @@ export default function LoginAnimatedScreen() {
     try {
       setLoading(true);
       setErrors({});
-
       await login(email.trim(), password);
       router.replace("/(tabs)/home");
     } catch (e: any) {
@@ -246,7 +243,6 @@ export default function LoginAnimatedScreen() {
 const styles = StyleSheet.create({
   bg: { flex: 1 },
   safe: { flexGrow: 1, paddingHorizontal: 20, justifyContent: "center" },
-
   logoBlock: { alignItems: "center", marginTop: 100 },
   logoWrapper: {
     shadowColor: "#0ea5e9",
@@ -256,7 +252,6 @@ const styles = StyleSheet.create({
     elevation: 18,
   },
   logo: { width: 220, height: 220 },
-
   card: {
     marginTop: 22,
     borderRadius: 18,
@@ -265,7 +260,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-
   cardTitle: {
     fontSize: 18,
     fontWeight: "700",
@@ -273,14 +267,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 12,
   },
-
   label: {
     fontSize: 12,
     fontWeight: "700",
     color: "rgba(255,255,255,0.9)",
     marginBottom: 6,
   },
-
   input: {
     height: 44,
     borderRadius: 10,
@@ -290,11 +282,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-
   inputError: {
     borderColor: "rgba(239,68,68,0.9)",
   },
-
   errorText: {
     marginTop: 6,
     marginBottom: 2,
@@ -302,7 +292,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-
   btn: {
     marginTop: 16,
     height: 46,
@@ -311,21 +300,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(56,189,248,0.95)",
   },
-
   btnPressed: {
     backgroundColor: "#16a34a",
   },
-
   btnText: {
     color: "#083344",
     fontWeight: "800",
   },
-
   linkWrap: {
     marginTop: 10,
     alignItems: "center",
   },
-
   linkText: {
     color: "rgba(255,255,255,0.9)",
     fontSize: 12,

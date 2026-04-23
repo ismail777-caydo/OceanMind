@@ -47,74 +47,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const loadUser = async () => {
       try {
-        // Supabase hiya source of truth
-        const { data, error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn("getSession error:", error.message);
-        }
-
+        const { data } = await supabase.auth.getSession();
         const sessionUser = data.session?.user;
 
         if (sessionUser) {
           const formattedUser = formatUser(sessionUser);
-
-          if (mounted) {
-            setUser(formattedUser);
-          }
-
+          if (mounted) setUser(formattedUser);
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
         } else {
-          // fallback mn AsyncStorage
           const savedUser = await AsyncStorage.getItem(STORAGE_KEY);
-
           if (savedUser) {
-            const parsedUser = JSON.parse(savedUser);
-
-            if (mounted) {
-              setUser(parsedUser);
-            }
+            if (mounted) setUser(JSON.parse(savedUser));
           } else {
-            if (mounted) {
-              setUser(null);
-            }
+            if (mounted) setUser(null);
           }
         }
-      } catch (err) {
-        console.warn("loadUser error:", err);
-
-        if (mounted) {
-          setUser(null);
-        }
+      } catch {
+        if (mounted) setUser(null);
       } finally {
-        if (mounted) {
-          setReady(true);
-        }
+        if (mounted) setReady(true);
       }
     };
 
     loadUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        const sessionUser = session?.user;
+      const sessionUser = session?.user;
 
-        if (sessionUser) {
-          const formattedUser = formatUser(sessionUser);
-
-          if (mounted) {
-            setUser(formattedUser);
-          }
-
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
-        } else {
-          if (mounted) {
-            setUser(null);
-          }
-
-          await AsyncStorage.removeItem(STORAGE_KEY);
-        }
-      } catch (err) {
-        console.warn("onAuthStateChange error:", err);
+      if (sessionUser) {
+        const formattedUser = formatUser(sessionUser);
+        if (mounted) setUser(formattedUser);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+      } else {
+        if (mounted) setUser(null);
+        await AsyncStorage.removeItem(STORAGE_KEY);
       }
     });
 
@@ -130,9 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     const sessionUser = data.user;
 
@@ -151,13 +115,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     const newUser = data.user;
 
-    // Ila kan user raj3 men signUp, save profile
     if (newUser) {
       const { error: profileErr } = await supabase.from("profiles").upsert({
         id: newUser.id,
@@ -166,18 +127,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         city,
       });
 
-      if (profileErr) {
-        throw new Error(profileErr.message);
-      }
+      if (profileErr) throw new Error(profileErr.message);
     }
   };
 
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     setUser(null);
     await AsyncStorage.removeItem(STORAGE_KEY);
@@ -200,10 +156,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-
-  if (!ctx) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
-
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 }
