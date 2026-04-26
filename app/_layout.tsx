@@ -25,12 +25,12 @@ function RootNav() {
 
     if (!logged && inTabs) {
       resetSubscription();
-      router.replace("/home" as any);
+      router.replace("/" as any);
       return;
     }
 
     if (logged && !inTabs) {
-      router.replace("/home" as any);
+      router.replace("/(tabs)/home" as any);
     }
   }, [logged, ready, segments, router, resetSubscription]);
 
