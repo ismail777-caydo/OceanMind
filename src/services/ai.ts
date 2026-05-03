@@ -39,7 +39,8 @@ function getApiBaseUrl() {
     return `http://${host}:8000`;
   }
 
-  throw new Error("API base URL is not configured");
+  console.warn("API base URL is not configured");
+    return "https://ocean-mind-server-ai-production.up.railway.app";
 }
 
 const API_BASE_URL = getApiBaseUrl();
