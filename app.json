@@ -15,7 +15,7 @@
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": false,
-      "package": "com.ismailelmajdi.oceanmind"
+      "package": "com.oceanmind.fishing"
     },
 
     "web": {
