@@ -2,20 +2,23 @@
   "expo": {
     "name": "OCEAN MIND",
     "slug": "OceanMind",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "oceanmind",
     "userInterfaceStyle": "automatic",
 
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.oceanmind.fishing",
+      "buildNumber": "2"
     },
 
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": false,
-      "package": "com.oceanmind.fishing"
+      "package": "com.oceanmind.fishing",
+      "versionCode": 2
     },
 
     "web": {
