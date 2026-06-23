@@ -45,44 +45,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    const loadUser = async () => {
+    const bootstrap = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        const sessionUser = data.session?.user;
+        // 1️⃣ FAST PATH: local storage first (NO await blocking Supabase)
+        const cached = await AsyncStorage.getItem(STORAGE_KEY);
 
-        if (sessionUser) {
-          const formattedUser = formatUser(sessionUser);
-          if (mounted) setUser(formattedUser);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
-        } else {
-          const savedUser = await AsyncStorage.getItem(STORAGE_KEY);
-          if (savedUser) {
-            if (mounted) setUser(JSON.parse(savedUser));
-          } else {
-            if (mounted) setUser(null);
-          }
+        if (cached && mounted) {
+          setUser(JSON.parse(cached));
         }
-      } catch {
-        if (mounted) setUser(null);
-      } finally {
+
+        // 2️⃣ mark UI ready immediately (IMPORTANT FIX)
         if (mounted) setReady(true);
+
+        // 3️⃣ Supabase check runs in background (NON-blocking UI)
+        supabase.auth.getSession().then(async ({ data }) => {
+          const sessionUser = data.session?.user;
+
+          if (!mounted) return;
+
+          if (sessionUser) {
+            const formattedUser = formatUser(sessionUser);
+            setUser(formattedUser);
+
+            // async fire-and-forget (no blocking)
+            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+          }
+        });
+
+      } catch {
+        if (mounted) {
+          setUser(null);
+          setReady(true);
+        }
       }
     };
 
-    loadUser();
+    bootstrap();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const sessionUser = session?.user;
+    // auth listener stays but lightweight
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        const sessionUser = session?.user;
 
-      if (sessionUser) {
-        const formattedUser = formatUser(sessionUser);
-        if (mounted) setUser(formattedUser);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
-      } else {
-        if (mounted) setUser(null);
-        await AsyncStorage.removeItem(STORAGE_KEY);
+        if (!mounted) return;
+
+        if (sessionUser) {
+          const formattedUser = formatUser(sessionUser);
+          setUser(formattedUser);
+          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+        } else {
+          setUser(null);
+          AsyncStorage.removeItem(STORAGE_KEY);
+        }
       }
-    });
+    );
 
     return () => {
       mounted = false;
@@ -103,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (sessionUser) {
       const formattedUser = formatUser(sessionUser);
       setUser(formattedUser);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
     }
   };
 
@@ -132,8 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw new Error(error.message);
+    await supabase.auth.signOut();
 
     setUser(null);
     await AsyncStorage.removeItem(STORAGE_KEY);

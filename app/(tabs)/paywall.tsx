@@ -7,11 +7,51 @@ import {
   StyleSheet,
   Image,
   ImageBackground,
+  Linking,
+  Alert,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+type PlanType = "monthly" | "yearly";
+
+const WHATSAPP_NUMBER = "212603425532";
+
+const FEATURES = [
+  "Fish detection access",
+  "Smart fishing maps",
+  "Advanced premium tools",
+];
+
+const openWhatsApp = async (plan: PlanType) => {
+  const message =
+    plan === "yearly"
+      ? "Bonjour, je souhaite souscrire à l'abonnement annuel Ocean Mind (199 DH)."
+      : "Bonjour, je souhaite souscrire à l'abonnement mensuel Ocean Mind (49 DH).";
+
+  const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+    message
+  )}`;
+
+  try {
+    await Linking.openURL(url);
+  } catch (error) {
+    Alert.alert("Erreur", "Impossible d'ouvrir WhatsApp");
+  }
+};
+
 export default function PaywallScreen() {
+  const renderFeatures = () => (
+    <View style={styles.featuresBox}>
+      {FEATURES.map((item, index) => (
+        <View key={index} style={styles.featureRow}>
+          <Ionicons name="checkmark-circle" size={18} color="#2dd4bf" />
+          <Text style={styles.featureText}>{item}</Text>
+        </View>
+      ))}
+    </View>
+  );
+
   return (
     <ImageBackground
       source={require("../../src/assets/background.png")}
@@ -20,6 +60,7 @@ export default function PaywallScreen() {
     >
       <View style={styles.overlay} />
 
+      {/* TOP BAR */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={18} color="#fff" />
@@ -27,10 +68,7 @@ export default function PaywallScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.content}>
         <Image
           source={require("../../src/assets/logo.png")}
           style={styles.logo}
@@ -42,6 +80,35 @@ export default function PaywallScreen() {
           Unlock fish detection, smart maps, and advanced tools.
         </Text>
 
+        {/* ================= YEARLY ================= */}
+        <View style={[styles.planCard, { marginBottom: 18 }]}>
+          <View style={[styles.badge, { backgroundColor: "rgba(59,130,246,0.85)" }]}>
+            <Ionicons name="star-outline" size={14} color="#fff" />
+            <Text style={styles.badgeText}>BEST OFFER</Text>
+          </View>
+
+          <Text style={styles.planTitle}>Premium Yearly</Text>
+          <Text style={styles.planDesc}>Save money - Full access for 1 year</Text>
+
+          <View style={styles.priceBox}>
+            <Text style={styles.price}>199 DH</Text>
+            <Text style={styles.priceSub}>/ an</Text>
+          </View>
+
+          {renderFeatures()}
+
+          <Pressable
+            onPress={() => openWhatsApp("yearly")}
+            style={[styles.subscribeBtn, { backgroundColor: "rgba(59,130,246,0.85)" }]}
+          >
+            <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+            <Text style={styles.subscribeText}>
+              Acheter Premium Annuel
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* ================= MONTHLY ================= */}
         <View style={styles.planCard}>
           <View style={styles.badge}>
             <Ionicons name="diamond-outline" size={14} color="#fff" />
@@ -56,37 +123,26 @@ export default function PaywallScreen() {
             <Text style={styles.priceSub}>/ mois</Text>
           </View>
 
-          <View style={styles.featuresBox}>
-            <View style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={18} color="#2dd4bf" />
-              <Text style={styles.featureText}>Fish detection access</Text>
-            </View>
+          {renderFeatures()}
 
-            <View style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={18} color="#2dd4bf" />
-              <Text style={styles.featureText}>Smart fishing maps</Text>
-            </View>
-
-            <View style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={18} color="#2dd4bf" />
-              <Text style={styles.featureText}>Advanced premium tools</Text>
-            </View>
-          </View>
-
-          <Pressable disabled={true} style={[styles.subscribeBtn, { opacity: 0.72 }]}>
-            <Ionicons name="time-outline" size={18} color="#fff" />
-            <Text style={styles.subscribeText}>Paiement bientôt disponible</Text>
+          <Pressable
+            onPress={() => openWhatsApp("monthly")}
+            style={styles.subscribeBtn}
+          >
+            <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+            <Text style={styles.subscribeText}>
+              Acheter Premium Mensuel
+            </Text>
           </Pressable>
-
-          <Text style={styles.noticeText}>
-            L’abonnement sera activé après validation sur Google Play.
-          </Text>
         </View>
 
+        {/* BOTTOM */}
         <View style={styles.bottomActions}>
-          <Pressable disabled={true} style={[styles.secondaryBtn, { opacity: 0.55 }]}>
+          <Pressable disabled style={[styles.secondaryBtn, { opacity: 0.55 }]}>
             <Ionicons name="refresh-outline" size={16} color="#fff" />
-            <Text style={styles.secondaryText}>Restore Purchase bientôt disponible</Text>
+            <Text style={styles.secondaryText}>
+              Restore Purchase bientôt disponible
+            </Text>
           </Pressable>
 
           <Pressable onPress={() => router.back()} style={styles.ghostBtn}>
@@ -98,6 +154,7 @@ export default function PaywallScreen() {
   );
 }
 
+/* ================= STYLES ================= */
 const styles = StyleSheet.create({
   bg: { flex: 1 },
 
@@ -114,7 +171,6 @@ const styles = StyleSheet.create({
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -132,7 +188,6 @@ const styles = StyleSheet.create({
 
   content: {
     paddingHorizontal: 20,
-    paddingTop: 4,
     paddingBottom: 28,
   },
 
@@ -140,8 +195,6 @@ const styles = StyleSheet.create({
     width: 155,
     height: 155,
     alignSelf: "center",
-    marginTop: 2,
-    marginBottom: 2,
   },
 
   title: {
@@ -157,7 +210,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 13,
     fontWeight: "700",
-    lineHeight: 19,
     marginBottom: 18,
   },
 
@@ -177,7 +229,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(59,130,246,0.85)",
+    backgroundColor: "rgba(16,185,129,0.85)",
     marginBottom: 14,
   },
 
@@ -218,7 +270,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     marginLeft: 6,
-    marginBottom: 5,
   },
 
   featuresBox: {
@@ -254,15 +305,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  noticeText: {
-    marginTop: 10,
-    color: "rgba(255,255,255,0.72)",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 16,
-  },
-
   bottomActions: {
     marginTop: 16,
     gap: 10,
@@ -278,14 +320,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
-    paddingHorizontal: 12,
   },
 
   secondaryText: {
     color: "#fff",
     fontWeight: "800",
     fontSize: 12,
-    textAlign: "center",
   },
 
   ghostBtn: {
