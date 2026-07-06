@@ -47,17 +47,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const bootstrap = async () => {
       try {
-        // 1️⃣ FAST PATH: local storage first (NO await blocking Supabase)
+        // FAST PATH: local storage first
         const cached = await AsyncStorage.getItem(STORAGE_KEY);
 
         if (cached && mounted) {
           setUser(JSON.parse(cached));
         }
 
-        // 2️⃣ mark UI ready immediately (IMPORTANT FIX)
+        // mark UI ready immediately
         if (mounted) setReady(true);
 
-        // 3️⃣ Supabase check runs in background (NON-blocking UI)
+        // Supabase check runs in background
         supabase.auth.getSession().then(async ({ data }) => {
           const sessionUser = data.session?.user;
 
@@ -67,8 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const formattedUser = formatUser(sessionUser);
             setUser(formattedUser);
 
-            // async fire-and-forget (no blocking)
-            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+            AsyncStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify(formattedUser)
+            );
           }
         });
 
@@ -82,7 +84,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     bootstrap();
 
-    // auth listener stays but lightweight
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         const sessionUser = session?.user;
@@ -91,8 +92,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (sessionUser) {
           const formattedUser = formatUser(sessionUser);
+
           setUser(formattedUser);
-          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+
+          AsyncStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(formattedUser)
+          );
         } else {
           setUser(null);
           AsyncStorage.removeItem(STORAGE_KEY);
@@ -118,8 +124,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (sessionUser) {
       const formattedUser = formatUser(sessionUser);
+
       setUser(formattedUser);
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(formattedUser));
+
+      AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(formattedUser)
+      );
     }
   };
 
@@ -136,14 +147,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const newUser = data.user;
 
     if (newUser) {
-      const { error: profileErr } = await supabase.from("profiles").upsert({
-        id: newUser.id,
-        full_name: name,
-        phone,
-        city,
-      });
+      const trialStart = new Date();
 
-      if (profileErr) throw new Error(profileErr.message);
+      const trialEnd = new Date();
+      trialEnd.setDate(trialEnd.getDate() + 7);
+
+      const { error: profileErr } = await supabase
+        .from("profiles")
+        .upsert({
+          id: newUser.id,
+          full_name: name,
+          phone,
+          city,
+
+          is_premium: false,
+
+          trial_started_at: trialStart.toISOString(),
+          trial_ends_at: trialEnd.toISOString(),
+        });
+
+      if (profileErr) {
+        throw new Error(profileErr.message);
+      }
     }
   };
 
@@ -151,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
 
     setUser(null);
+
     await AsyncStorage.removeItem(STORAGE_KEY);
   };
 
@@ -166,11 +192,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [ready, logged, user]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+
   return ctx;
 }

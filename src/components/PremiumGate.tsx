@@ -20,7 +20,7 @@ export default function PremiumGate({
   children,
   featureName = "this feature",
 }: Props) {
-  const { isPremium, loading } = usePremiumAccess();
+  const { canAccessPremium, loading } = usePremiumAccess();
 
   if (loading) {
     return (
@@ -37,7 +37,7 @@ export default function PremiumGate({
     );
   }
 
-  if (!isPremium) {
+  if (!canAccessPremium) {
     return (
       <ImageBackground
         source={require("../assets/background.png")}
@@ -81,22 +81,28 @@ export default function PremiumGate({
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
+  bg: {
+    flex: 1,
+  },
+
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(10, 25, 45, 0.45)",
+    backgroundColor: "rgba(10,25,45,0.45)",
   },
+
   center: {
     flex: 1,
     paddingHorizontal: 22,
     alignItems: "center",
     justifyContent: "center",
   },
+
   logo: {
     width: 150,
     height: 150,
     marginBottom: 10,
   },
+
   card: {
     width: "100%",
     borderRadius: 22,
@@ -106,6 +112,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
   },
+
   iconWrap: {
     width: 62,
     height: 62,
@@ -115,12 +122,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(59,130,246,0.85)",
     marginBottom: 14,
   },
+
   title: {
     color: "#fff",
     fontSize: 26,
     fontWeight: "900",
     textAlign: "center",
   },
+
   desc: {
     marginTop: 10,
     color: "rgba(255,255,255,0.82)",
@@ -130,6 +139,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: 20,
   },
+
   upgradeBtn: {
     height: 50,
     minWidth: 190,
@@ -141,11 +151,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 18,
   },
+
   upgradeText: {
     color: "#fff",
     fontWeight: "900",
     fontSize: 14,
   },
+
   loadingText: {
     color: "#fff",
     fontSize: 16,

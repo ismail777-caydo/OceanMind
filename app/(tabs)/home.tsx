@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../src/lib/supabaseClient";
 import { useAuth } from "../../src/auth/AuthContext";
+import TrialCard from "../../src/components/TrialCard";
 
 const POS_KEY = "store_fab_position_v1";
 const FAB_SIZE = 70;
@@ -47,6 +48,7 @@ function Card({ title, desc, icon, bg, onPress }: CardProps) {
       <View style={[styles.iconBox, { backgroundColor: bg }]}>
         <MaterialCommunityIcons name={icon} size={18} color="#fff" />
       </View>
+
       <Text style={styles.cardTitle}>{title}</Text>
       <Text style={styles.cardDesc}>{desc}</Text>
     </Pressable>
@@ -65,26 +67,47 @@ export default function Home() {
   const defaultX = width - FAB_MARGIN - FAB_SIZE;
   const defaultY = height - 110 - FAB_SIZE;
 
-  const pan = useRef(new Animated.ValueXY({ x: defaultX, y: defaultY })).current;
-  const start = useRef({ x: defaultX, y: defaultY });
+  const pan = useRef(
+    new Animated.ValueXY({
+      x: defaultX,
+      y: defaultY,
+    })
+  ).current;
+
+  const start = useRef({
+    x: defaultX,
+    y: defaultY,
+  });
 
   const clamp = (v: number, min: number, max: number) =>
     Math.max(min, Math.min(max, v));
 
   const DRAG_THRESHOLD = 6;
+
   const isDraggingRef = useRef(false);
 
   useEffect(() => {
     const loadFabPosition = async () => {
       try {
         const raw = await AsyncStorage.getItem(POS_KEY);
+
         if (!raw) return;
 
         const saved = JSON.parse(raw);
 
-        if (typeof saved?.x === "number" && typeof saved?.y === "number") {
-          pan.setValue({ x: saved.x, y: saved.y });
-          start.current = { x: saved.x, y: saved.y };
+        if (
+          typeof saved?.x === "number" &&
+          typeof saved?.y === "number"
+        ) {
+          pan.setValue({
+            x: saved.x,
+            y: saved.y,
+          });
+
+          start.current = {
+            x: saved.x,
+            y: saved.y,
+          };
         }
       } catch (e) {
         console.log("Failed to load FAB position:", e);
@@ -135,29 +158,48 @@ export default function Home() {
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
+
         onMoveShouldSetPanResponder: (_, g) =>
-          Math.abs(g.dx) > DRAG_THRESHOLD || Math.abs(g.dy) > DRAG_THRESHOLD,
+          Math.abs(g.dx) > DRAG_THRESHOLD ||
+          Math.abs(g.dy) > DRAG_THRESHOLD,
+
         onPanResponderGrant: () => {
           isDraggingRef.current = true;
+
           start.current = {
             x: (pan.x as any)._value,
             y: (pan.y as any)._value,
           };
         },
+
         onPanResponderMove: (_, g) => {
           const nextX = start.current.x + g.dx;
           const nextY = start.current.y + g.dy;
 
-          const x = clamp(nextX, 8, width - FAB_SIZE - 8);
-          const y = clamp(nextY, 8, height - FAB_SIZE - TABBAR_SAFE);
+          const x = clamp(
+            nextX,
+            8,
+            width - FAB_SIZE - 8
+          );
+
+          const y = clamp(
+            nextY,
+            8,
+            height - FAB_SIZE - TABBAR_SAFE
+          );
 
           pan.setValue({ x, y });
         },
+
         onPanResponderRelease: async () => {
           try {
             const x = (pan.x as any)._value;
             const y = (pan.y as any)._value;
-            await AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y }));
+
+            await AsyncStorage.setItem(
+              POS_KEY,
+              JSON.stringify({ x, y })
+            );
           } catch (e) {
             console.log("Failed to save FAB position:", e);
           }
@@ -170,8 +212,14 @@ export default function Home() {
     [width, height, pan]
   );
 
-  const displayName = profile?.full_name?.trim() || user?.email?.split("@")[0] || "Utilisateur";
-  const displayCity = profile?.city?.trim() || "Ville non renseignée";
+  const displayName =
+    profile?.full_name?.trim() ||
+    user?.email?.split("@")[0] ||
+    "Utilisateur";
+
+  const displayCity =
+    profile?.city?.trim() ||
+    "Ville non renseignée";
 
   return (
     <View style={{ flex: 1 }}>
@@ -188,7 +236,9 @@ export default function Home() {
         >
           <View style={styles.header}>
             <View>
-              <Text style={styles.welcome}>Bienvenue {displayName} 🙂</Text>
+              <Text style={styles.welcome}>
+                Bienvenue {displayName} 🙂
+              </Text>
 
               <View style={styles.locRow}>
                 <Ionicons
@@ -196,8 +246,11 @@ export default function Home() {
                   size={14}
                   color="rgba(255,255,255,0.75)"
                 />
+
                 <Text style={styles.location}>
-                  {profileLoading ? "Chargement..." : displayCity}
+                  {profileLoading
+                    ? "Chargement..."
+                    : displayCity}
                 </Text>
               </View>
             </View>
@@ -205,16 +258,27 @@ export default function Home() {
             <Pressable
               style={({ pressed }) => [
                 styles.bellBtn,
-                pressed && { transform: [{ scale: 0.96 }] },
+                pressed && {
+                  transform: [{ scale: 0.96 }],
+                },
               ]}
             >
-              <Ionicons name="notifications-outline" size={18} color="#fff" />
+              <Ionicons
+                name="notifications-outline"
+                size={18}
+                color="#fff"
+              />
             </Pressable>
           </View>
 
+          <TrialCard />
+
           {!ready ? (
             <View style={styles.loaderBox}>
-              <ActivityIndicator size="large" color="#38bdf8" />
+              <ActivityIndicator
+                size="large"
+                color="#38bdf8"
+              />
             </View>
           ) : (
             <View style={styles.grid}>
@@ -223,7 +287,9 @@ export default function Home() {
                 desc="Espèce, taille, légalité"
                 icon="fish"
                 bg="rgba(56,189,248,0.35)"
-                onPress={() => router.push("/(tabs)/detection")}
+                onPress={() =>
+                  router.push("/(tabs)/detection")
+                }
               />
 
               <Card
@@ -231,7 +297,9 @@ export default function Home() {
                 desc="Zones riches recommandées"
                 icon="map-marker-radius"
                 bg="rgba(34,197,94,0.35)"
-                onPress={() => router.push("/(tabs)/zones")}
+                onPress={() =>
+                  router.push("/(tabs)/zones")
+                }
               />
 
               <Card
@@ -239,7 +307,9 @@ export default function Home() {
                 desc="Prévisions en temps réel"
                 icon="weather-partly-cloudy"
                 bg="rgba(59,130,246,0.35)"
-                onPress={() => router.push("/(tabs)/meteo")}
+                onPress={() =>
+                  router.push("/(tabs)/meteo")
+                }
               />
 
               <Card
@@ -247,7 +317,9 @@ export default function Home() {
                 desc="Horaires et intensité"
                 icon="wave"
                 bg="rgba(139,92,246,0.35)"
-                onPress={() => router.push("/(tabs)/tides")}
+                onPress={() =>
+                  router.push("/(tabs)/tides")
+                }
               />
 
               <Card
@@ -255,7 +327,9 @@ export default function Home() {
                 desc="Historique des captures"
                 icon="book-outline"
                 bg="rgba(245,158,11,0.35)"
-                onPress={() => router.push("/(tabs)/logbook")}
+                onPress={() =>
+                  router.push("/(tabs)/logbook")
+                }
               />
 
               <Card
@@ -263,7 +337,9 @@ export default function Home() {
                 desc="Partage et conseils"
                 icon="account-group-outline"
                 bg="rgba(16,185,129,0.35)"
-                onPress={() => router.push("/(tabs)/community")}
+                onPress={() =>
+                  router.push("/(tabs)/community")
+                }
               />
 
               <Card
@@ -271,24 +347,37 @@ export default function Home() {
                 desc="Gérez vos informations"
                 icon="account-circle-outline"
                 bg="rgba(148,163,184,0.35)"
-                onPress={() => router.push("/(tabs)/profil")}
+                onPress={() =>
+                  router.push("/(tabs)/profil")
+                }
               />
             </View>
           )}
         </ScrollView>
 
         <Animated.View
-          style={[styles.storeFabWrap, { transform: pan.getTranslateTransform() }]}
+          style={[
+            styles.storeFabWrap,
+            {
+              transform:
+                pan.getTranslateTransform(),
+            },
+          ]}
           {...panResponder.panHandlers}
         >
           <Pressable
             onPress={() => {
               if (isDraggingRef.current) return;
+
               router.push("/(tabs)/store");
             }}
             style={styles.storeFab}
           >
-            <Ionicons name="cart-outline" size={22} color="#fff" />
+            <Ionicons
+              name="cart-outline"
+              size={22}
+              color="#fff"
+            />
           </Pressable>
         </Animated.View>
       </ImageBackground>
@@ -297,38 +386,47 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
+  bg: {
+    flex: 1,
+  },
+
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(10, 25, 45, 0.35)",
   },
+
   container: {
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 28,
   },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 16,
   },
+
   welcome: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "900",
   },
+
   locRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     marginTop: 6,
   },
+
   location: {
     color: "rgba(255,255,255,0.8)",
     fontSize: 12,
     fontWeight: "700",
   },
+
   bellBtn: {
     height: 44,
     width: 44,
@@ -339,11 +437,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   loaderBox: {
     marginTop: 24,
     alignItems: "center",
     justifyContent: "center",
   },
+
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -351,6 +451,7 @@ const styles = StyleSheet.create({
     rowGap: 16,
     columnGap: 12,
   },
+
   card: {
     width: "48%",
     minHeight: 145,
@@ -361,6 +462,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
+
   iconBox: {
     height: 36,
     width: 36,
@@ -369,12 +471,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
   },
+
   cardTitle: {
     color: "#fff",
     fontSize: 13,
     fontWeight: "900",
     lineHeight: 18,
   },
+
   cardDesc: {
     marginTop: 8,
     color: "rgba(255,255,255,0.75)",
@@ -382,11 +486,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 15,
   },
+
   storeFabWrap: {
     position: "absolute",
     left: 0,
     top: 0,
   },
+
   storeFab: {
     width: FAB_SIZE,
     height: FAB_SIZE,
@@ -400,6 +506,9 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.25,
     shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
   },
 });

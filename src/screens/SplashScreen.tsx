@@ -1,7 +1,7 @@
 import React from "react";
-import { View, Text, StyleSheet, Image, ImageBackground } from "react-native";
+import { View, StyleSheet, Image, ImageBackground } from "react-native";
 
-export default function SplashScreen() {
+export default function SplashScreen(): React.JSX.Element {
   return (
     <ImageBackground
       source={require("../assets/background.png")}
@@ -14,8 +14,6 @@ export default function SplashScreen() {
           style={styles.logo}
           resizeMode="contain"
         />
-
-        
       </View>
     </ImageBackground>
   );

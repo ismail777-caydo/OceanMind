@@ -1,14 +1,21 @@
 import { create } from "zustand";
 
 type SubscriptionState = {
-  isPremium: boolean;
+  hasPremium: boolean;
+  hasTrial: boolean;
+  canAccessPremium: boolean;
+
   planType: string | null;
   status: string | null;
   expiresAt: string | null;
+
   loading: boolean;
 
   setSubscription: (data: {
-    isPremium: boolean;
+    hasPremium: boolean;
+    hasTrial: boolean;
+    canAccessPremium: boolean;
+
     planType?: string | null;
     status?: string | null;
     expiresAt?: string | null;
@@ -19,15 +26,22 @@ type SubscriptionState = {
 };
 
 export const useSubscriptionStore = create<SubscriptionState>((set) => ({
-  isPremium: false,
+  hasPremium: false,
+  hasTrial: false,
+  canAccessPremium: false,
+
   planType: null,
   status: null,
   expiresAt: null,
+
   loading: false,
 
   setSubscription: (data) =>
     set({
-      isPremium: data.isPremium,
+      hasPremium: data.hasPremium,
+      hasTrial: data.hasTrial,
+      canAccessPremium: data.canAccessPremium,
+
       planType: data.planType ?? null,
       status: data.status ?? null,
       expiresAt: data.expiresAt ?? null,
@@ -37,10 +51,14 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
 
   resetSubscription: () =>
     set({
-      isPremium: false,
+      hasPremium: false,
+      hasTrial: false,
+      canAccessPremium: false,
+
       planType: null,
       status: null,
       expiresAt: null,
+
       loading: false,
     }),
 }));

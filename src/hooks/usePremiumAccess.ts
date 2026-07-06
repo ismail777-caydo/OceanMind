@@ -1,10 +1,20 @@
 import { useSubscriptionStore } from "../store/subscriptionStore";
 
 export function usePremiumAccess() {
-  const { isPremium, loading, planType, status, expiresAt } = useSubscriptionStore();
+  const {
+    hasPremium,
+    hasTrial,
+    canAccessPremium,
+    loading,
+    planType,
+    status,
+    expiresAt,
+  } = useSubscriptionStore();
 
   return {
-    isPremium,
+    hasPremium,
+    hasTrial,
+    canAccessPremium,
     loading,
     planType,
     status,

@@ -9,34 +9,50 @@ export async function loadUserSubscription(userId: string) {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("is_premium, plan_type, subscription_status, subscription_expires_at")
+      .select(
+        "is_premium, trial_ends_at, plan_type, subscription_status, subscription_expires_at"
+      )
       .eq("id", userId)
       .single();
 
     if (error) throw error;
 
-    const isPremium =
-      !!data?.is_premium &&
-      data?.subscription_status === "active" &&
-      (!data?.subscription_expires_at ||
-        new Date(data.subscription_expires_at).getTime() > Date.now());
+    const now = new Date();
+
+    const hasTrial =
+      !!data?.trial_ends_at &&
+      new Date(data.trial_ends_at).getTime() > now.getTime();
+
+    const hasPremium = !!data?.is_premium;
+
+    const canAccessPremium = hasPremium || hasTrial;
 
     setSubscription({
-      isPremium,
+      hasPremium,
+      hasTrial,
+      canAccessPremium,
+
       planType: data?.plan_type ?? null,
       status: data?.subscription_status ?? null,
-      expiresAt: data?.subscription_expires_at ?? null,
+
+      expiresAt: hasPremium
+        ? data?.subscription_expires_at
+        : data?.trial_ends_at ?? null,
     });
 
-    return isPremium;
+    return canAccessPremium;
   } catch (err) {
     console.error("loadUserSubscription error:", err);
+
     setSubscription({
-      isPremium: false,
+      hasPremium: false,
+      hasTrial: false,
+      canAccessPremium: false,
       planType: null,
       status: null,
       expiresAt: null,
     });
+
     return false;
   } finally {
     setLoading(false);
